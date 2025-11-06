@@ -1,0 +1,5 @@
+{
+  "name": "AI Meal Planner",
+  "description": "An intelligent meal planner that helps you save recipes, uses AI to estimate macros and health scores, and automatically generates a diversified two-week meal plan on a calendar.",
+  "requestFramePermissions": []
+}
