@@ -1,4 +1,5 @@
 
+
 export interface Tab {
   id: 'planner' | 'shopping' | 'meals' | 'log' | 'settings';
   label: string;
@@ -46,6 +47,7 @@ export interface Settings {
     weekendSnack: RecipeTag[];
   };
   people: Person[];
+  blacklistedIngredients: string[];
 }
 
 export interface Recipe {
@@ -64,7 +66,11 @@ export interface Recipe {
     healthScore: number;
     scoreReasoning: string;
     rating: number;
+    servings: number;
     isAlsoBreakfast?: boolean;
+    // New fields for variations
+    baseRecipeId?: string; // If this is a variation, this points to the original recipe's ID.
+    variationName?: string; // e.g., "Vegetarian version"
 }
 
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
@@ -86,4 +92,34 @@ export interface GeneratedRecipeData {
     instructions: string;
     category: RecipeCategory;
     tags: RecipeTag[];
+    servings: number;
+}
+
+export interface BulkParsedRecipe {
+    name: string;
+    ingredients: string;
+    instructions: string;
+    category: RecipeCategory;
+    tags: RecipeTag[];
+    macros: {
+        calories: number;
+        protein: number;
+        carbs: number;
+        fat: number;
+    };
+    healthScore: number;
+    scoreReasoning: string;
+    servings: number;
+}
+
+export interface ShoppingListItem {
+    id: string;
+    name: string;
+    checked: boolean;
+}
+
+export interface ShoppingListCategory {
+    id: string;
+    name: string;
+    items: ShoppingListItem[];
 }

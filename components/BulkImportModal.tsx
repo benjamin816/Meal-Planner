@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { XIcon, LoadingIcon, UploadIcon, CheckIcon } from './Icons';
 
@@ -6,14 +7,14 @@ type BulkImportMode = 'full_recipes' | 'meal_ideas';
 interface BulkImportModalProps {
     onClose: () => void;
     onBulkImport: (
-        documentText: string, 
+        sourceFile: File, 
         importMode: BulkImportMode,
         onProgress: (message: string) => void,
         onComplete: (count: number) => void
     ) => Promise<void>;
 }
 
-type ImportStatus = 'idle' | 'reading' | 'processing' | 'error' | 'success';
+type ImportStatus = 'idle' | 'processing' | 'error' | 'success';
 
 const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onBulkImport }) => {
     const [file, setFile] = useState<File | null>(null);
@@ -34,39 +35,24 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onBulkImport
     const handleImport = async () => {
         if (!file) return;
 
-        setStatus('reading');
-        setProgressMessage('Reading file...');
-
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            try {
-                const text = e.target?.result as string;
-                if (!text) {
-                    throw new Error("Could not read text from the file.");
+        setStatus('processing');
+        try {
+            await onBulkImport(
+                file,
+                importMode,
+                (message) => setProgressMessage(message),
+                (count) => {
+                    setStatus('success');
+                    setSuccessCount(count);
                 }
-                setStatus('processing');
-                await onBulkImport(
-                    text,
-                    importMode,
-                    (message) => setProgressMessage(message),
-                    (count) => {
-                        setStatus('success');
-                        setSuccessCount(count);
-                    }
-                );
-            } catch (err: any) {
-                setStatus('error');
-                setProgressMessage(err.message || 'An unknown error occurred during import.');
-            }
-        };
-        reader.onerror = () => {
+            );
+        } catch (err: any) {
             setStatus('error');
-            setProgressMessage('Failed to read the selected file.');
-        };
-        reader.readAsText(file);
+            setProgressMessage(err.message || 'An unknown error occurred during import.');
+        }
     };
     
-    const isProcessing = status === 'reading' || status === 'processing';
+    const isProcessing = status === 'processing';
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
@@ -82,17 +68,17 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onBulkImport
                     {status !== 'success' && (
                         <>
                             <div className="mb-4">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">What kind of document are you uploading?</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">What kind of file are you uploading?</label>
                                 <div className="flex space-x-4">
                                     <label className="flex-1 p-3 border rounded-lg cursor-pointer transition-colors" data-active={importMode === 'full_recipes'}>
                                         <input type="radio" name="import-mode" value="full_recipes" checked={importMode === 'full_recipes'} onChange={() => setImportMode('full_recipes')} className="sr-only" />
                                         <div className="font-semibold text-gray-800">Full Recipes</div>
-                                        <div className="text-xs text-gray-500">A document with names, ingredients, and instructions.</div>
+                                        <div className="text-xs text-gray-500">A document with names, ingredients, etc.</div>
                                     </label>
                                     <label className="flex-1 p-3 border rounded-lg cursor-pointer transition-colors" data-active={importMode === 'meal_ideas'}>
                                         <input type="radio" name="import-mode" value="meal_ideas" checked={importMode === 'meal_ideas'} onChange={() => setImportMode('meal_ideas')} className="sr-only" />
                                         <div className="font-semibold text-gray-800">Meal Ideas</div>
-                                        <div className="text-xs text-gray-500">A list of recipe titles (e.g., from a Word doc).</div>
+                                        <div className="text-xs text-gray-500">A simple list of recipe titles.</div>
                                     </label>
                                 </div>
                                 <style>{`
@@ -101,7 +87,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onBulkImport
                             </div>
 
                              <div className="p-3 bg-gray-50 rounded-md text-sm text-gray-600 mb-4">
-                                <strong>Tip:</strong> For best results, use text-based files (`.txt`, `.md`, `.csv`). If you have a `.docx` or `.pdf`, copy-pasting the content into a plain text file first works best.
+                                <strong>Tip:</strong> You can now upload PDF files directly! The AI will read them, even if they are scanned images. Text files (`.txt`, `.md`) also work well.
                             </div>
 
                             <div 
@@ -113,7 +99,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onBulkImport
                                     ref={fileInputRef}
                                     onChange={handleFileChange}
                                     className="hidden"
-                                    accept=".txt,.md,.csv,.doc,.docx,application/pdf"
+                                    accept=".txt,.md,.pdf"
                                 />
                                 <div className="mx-auto h-12 w-12 text-gray-400">
                                     <UploadIcon />
@@ -125,7 +111,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onBulkImport
                                         "Click to select a file"
                                     )}
                                 </p>
-                                <p className="text-xs text-gray-500">TXT, MD, CSV recommended</p>
+                                <p className="text-xs text-gray-500">PDF, TXT, MD supported</p>
                             </div>
                         </>
                     )}

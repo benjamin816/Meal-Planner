@@ -123,6 +123,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSettingsChange,
     const [localAllTags, setLocalAllTags] = useState<Record<RecipeCategory, RecipeTag[]>>(allTags);
     const [isAutoSuggestModalOpen, setIsAutoSuggestModalOpen] = useState(false);
     const [editingPersonIndex, setEditingPersonIndex] = useState<number | null>(null);
+    const [newBlacklistedIngredient, setNewBlacklistedIngredient] = useState('');
 
     useEffect(() => {
         setLocalSettings(settings);
@@ -186,6 +187,24 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSettingsChange,
         }
         setIsAutoSuggestModalOpen(false);
         setEditingPersonIndex(null);
+    };
+
+    const handleAddBlacklistedIngredient = () => {
+        const ingredientToAdd = newBlacklistedIngredient.trim().toLowerCase();
+        if (ingredientToAdd && !localSettings.blacklistedIngredients.includes(ingredientToAdd)) {
+            setLocalSettings(prev => ({
+                ...prev,
+                blacklistedIngredients: [...prev.blacklistedIngredients, ingredientToAdd].sort()
+            }));
+            setNewBlacklistedIngredient('');
+        }
+    };
+
+    const handleRemoveBlacklistedIngredient = (ingredientToRemove: string) => {
+        setLocalSettings(prev => ({
+            ...prev,
+            blacklistedIngredients: prev.blacklistedIngredients.filter(i => i !== ingredientToRemove)
+        }));
     };
 
     const generationTagGroups: {
@@ -277,6 +296,39 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSettingsChange,
                             <label className="block text-xs font-medium text-gray-700 mb-1">Weekend Snacks</label>
                             <input type="number" min="0" max="2" value={localSettings.mealsPerWeek.weekendSnacks} onChange={e => setLocalSettings(s => ({...s, mealsPerWeek: {...s.mealsPerWeek, weekendSnacks: parseInt(e.target.value)}}))} className="w-full border-gray-300 rounded-md shadow-sm" />
                         </div>
+                    </div>
+                </div>
+
+                {/* Avoided Ingredients */}
+                <div className="p-6 bg-gray-50 rounded-lg border">
+                    <h3 className="text-xl font-semibold text-gray-800 mb-4">Avoided Ingredients</h3>
+                    <p className="text-sm text-gray-600 mb-4">Add ingredients here to prevent the AI from using them in generated, imported, or edited recipes. Useful for allergies or preferences.</p>
+                     <div className="flex items-center mb-4">
+                        <input 
+                            type="text" 
+                            placeholder="e.g., mushrooms, cilantro" 
+                            value={newBlacklistedIngredient}
+                            onChange={(e) => setNewBlacklistedIngredient(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleAddBlacklistedIngredient();
+                                }
+                            }}
+                            className="flex-grow border-gray-300 rounded-l-md shadow-sm text-sm focus:ring-blue-500 focus:border-blue-500"
+                        />
+                        <button type="button" onClick={handleAddBlacklistedIngredient} className="bg-blue-600 text-white p-2 rounded-r-md hover:bg-blue-700 font-semibold text-sm">Add</button>
+                    </div>
+                    <div className="flex flex-wrap gap-2 p-3 bg-white rounded-md border items-center min-h-[48px]">
+                        {localSettings.blacklistedIngredients.length === 0 && <span className="text-sm text-gray-400">No ingredients blacklisted yet.</span>}
+                        {localSettings.blacklistedIngredients.map(ing => (
+                            <span key={ing} className="bg-red-100 text-red-800 text-sm font-medium pl-3 pr-1.5 py-1 rounded-full flex items-center">
+                                {ing}
+                                <button onClick={() => handleRemoveBlacklistedIngredient(ing)} className="ml-1.5 text-red-500 hover:bg-red-200 rounded-full w-4 h-4 flex items-center justify-center transition-colors">
+                                    <XIcon className="h-3 w-3" />
+                                </button>
+                            </span>
+                        ))}
                     </div>
                 </div>
 

@@ -13,7 +13,8 @@ const LogView: React.FC<LogViewProps> = ({ eatenLog, mealPlan }) => {
         const entries: { date: string, mealType: MealType, recipe: Recipe }[] = [];
         
         // Sort dates descending
-        const sortedDates = Array.from(eatenLog.keys()).sort((a,b) => new Date(b).getTime() - new Date(a).getTime());
+        // Fix: The keys from eatenLog are of type unknown. Cast to string[] to allow sorting.
+        const sortedDates = (Array.from(eatenLog.keys()) as string[]).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
         
         for (const dateString of sortedDates) {
             const dayLog = eatenLog.get(dateString);

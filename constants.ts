@@ -42,5 +42,6 @@ export const DEFAULT_SETTINGS: Settings = {
     people: [
         { name: 'Person 1', goals: { calories: 2000, protein: 30, carbs: 40, fat: 30 } },
         { name: 'Person 2', goals: { calories: 2000, protein: 30, carbs: 40, fat: 30 } },
-    ]
+    ],
+    blacklistedIngredients: [],
 };

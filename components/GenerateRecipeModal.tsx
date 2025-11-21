@@ -26,7 +26,8 @@ const GenerateRecipeModal: React.FC<GenerateRecipeModalProps> = ({ onClose, onRe
 
         try {
             const availableTags = allTags[category] || [];
-            const recipeData = await generateRecipeFromIdeaWithGemini(idea, category, availableTags);
+            // Fix: Provide the missing `blacklistedIngredients` argument. An empty array is a safe default.
+            const recipeData = await generateRecipeFromIdeaWithGemini(idea, category, availableTags, []);
             onRecipeGenerated({ ...recipeData, category });
         } catch (err: any) {
             console.error(err);

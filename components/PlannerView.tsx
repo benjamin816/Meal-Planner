@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { MealPlan, EatenLog, PlannedMeal, Recipe, MealType, Tab } from '../types';
-import { LoadingIcon, GenerateIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon, ShoppingCartIcon } from './Icons';
+import { LoadingIcon, GenerateIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon, ShoppingCartIcon, MagicWandIcon } from './Icons';
 import Tag from './Tag';
 
 
@@ -13,9 +13,10 @@ interface PlannerViewProps {
   onDayClick: (date: string, meal: PlannedMeal) => void;
   onMarkAsEaten: (date: string, mealType: MealType, eaten: boolean) => void;
   setActiveTab: (tab: Tab) => void;
+  onAiEditMeal: (recipe: Recipe) => void;
 }
 
-const PlannerView: React.FC<PlannerViewProps> = ({ mealPlan, eatenLog, generatePlan, isLoading, onDayClick, onMarkAsEaten, setActiveTab }) => {
+const PlannerView: React.FC<PlannerViewProps> = ({ mealPlan, eatenLog, generatePlan, isLoading, onDayClick, onMarkAsEaten, setActiveTab, onAiEditMeal }) => {
   const [view, setView] = useState<'month' | 'week' | 'today'>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
 
@@ -39,7 +40,7 @@ const PlannerView: React.FC<PlannerViewProps> = ({ mealPlan, eatenLog, generateP
         if (view === 'month') {
             newDate.setMonth(newDate.getMonth() + 1);
         } else if (view === 'week') {
-            newDate.setDate(newDate.getDate() + 7);
+            newDate.setDate(newDate.getDate() - 7);
         } else {
             newDate.setDate(newDate.getDate() + 1);
         }
@@ -104,22 +105,31 @@ const PlannerView: React.FC<PlannerViewProps> = ({ mealPlan, eatenLog, generateP
     const { bg, text, label } = mealTypeStyles[mealType];
 
     return (
-      <div className={`${bg} ${text} p-1 rounded mb-1 flex items-center group`}>
+      <div className={`${bg} ${text} p-1 rounded mb-1 flex items-center group relative`}>
         <div className="flex-grow truncate text-xs">
           <strong className="mr-1">{label}</strong>
           {recipe.name}
         </div>
-        <label className="flex items-center cursor-pointer ml-1">
-          <input 
-            type="checkbox" 
-            checked={isEaten}
-            onChange={(e) => onMarkAsEaten(dateString, mealType, e.target.checked)}
-            className="hidden"
-          />
-          <div className={`w-4 h-4 rounded-sm border flex items-center justify-center ${isEaten ? 'bg-green-500 border-green-500' : 'bg-white border-gray-400 group-hover:border-gray-600'}`}>
-            {isEaten && <CheckIcon />}
-          </div>
-        </label>
+        <div className="flex items-center">
+            <button
+                onClick={(e) => { e.stopPropagation(); onAiEditMeal(recipe); }}
+                className="opacity-0 group-hover:opacity-100 text-purple-600 hover:text-purple-800 transition-opacity"
+                title="Edit this meal"
+            >
+                <MagicWandIcon className="h-4 w-4" />
+            </button>
+            <label className="flex items-center cursor-pointer ml-1">
+            <input 
+                type="checkbox" 
+                checked={isEaten}
+                onChange={(e) => onMarkAsEaten(dateString, mealType, e.target.checked)}
+                className="hidden"
+            />
+            <div className={`w-4 h-4 rounded-sm border flex items-center justify-center ${isEaten ? 'bg-green-500 border-green-500' : 'bg-white border-gray-400 group-hover:border-gray-600'}`}>
+                {isEaten && <CheckIcon />}
+            </div>
+            </label>
+        </div>
       </div>
     );
   };
