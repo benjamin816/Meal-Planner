@@ -1,5 +1,4 @@
 
-
 import React, { useState, useCallback, useRef } from 'react';
 import { Recipe, RecipeCategory, RecipeTag, GeneratedRecipeData, BulkParsedRecipe } from '../types';
 import RecipeListView from './RecipeListView';
@@ -24,11 +23,13 @@ interface MealsViewProps {
   deleteAllRecipes: () => void;
   isLoading: boolean;
   allTags: Record<RecipeCategory, RecipeTag[]>;
+  // Fix: Added missing 'percentage' parameter to 'onProgress' to match signature in App.tsx and requirements of BulkImportModal
   bulkImportRecipes: (
     sourceFile: File,
     importMode: 'full_recipes' | 'meal_ideas',
-    onProgress: (message: string) => void,
-    onComplete: (count: number) => void
+    onProgress: (message: string, percentage: number) => void,
+    onComplete: (count: number) => void,
+    onAbortSignal: { isCancelled: boolean }
   ) => Promise<void>;
   onEnterKitchenMode: (recipe: Recipe) => void;
   handleEditRecipe: (recipe: Recipe) => void;

@@ -1,22 +1,15 @@
 
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { Recipe, RecipeCategory, RecipeTag, NutritionGoals, GeneratedRecipeData, Settings, MealPlan, PlannedMeal, MealType, BulkParsedRecipe } from "../types";
 import { DEFAULT_ALL_TAGS } from "../constants";
 
-if (!process.env.API_KEY) {
-    // A default key is provided for development, but it's best to use an environment variable.
-    console.warn("API_KEY environment variable is not set. Using a placeholder. This may fail.");
-}
-
-// Fix: Always use new GoogleGenAI({apiKey: process.env.API_KEY});
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
-// Fix: Use a recommended model. Upgraded to Pro for more complex tasks.
-const model = "gemini-2.5-pro";
+
+const PRO_MODEL = 'gemini-3-pro-preview';
+const FLASH_MODEL = 'gemini-3-flash-preview';
 
 const parseJsonGracefully = <T>(jsonString: string): T | null => {
     try {
-        // The response might have markdown ```json ... ``` wrapper
         const match = /```json\n([\s\S]*)\n```/.exec(jsonString);
         if (match) {
             return JSON.parse(match[1]);
@@ -28,7 +21,6 @@ const parseJsonGracefully = <T>(jsonString: string): T | null => {
     }
 }
 
-// Helper function to convert a browser File object to a Gemini GenerativePart.
 const fileToGenerativePart = async (file: File) => {
   const base64EncodedDataPromise = new Promise<string>((resolve) => {
     const reader = new FileReader();
@@ -65,7 +57,7 @@ export const analyzeRecipeWithGemini = async (
     `;
 
     const response = await ai.models.generateContent({
-        model,
+        model: FLASH_MODEL,
         contents: prompt,
         config: {
             responseMimeType: "application/json",
@@ -99,7 +91,6 @@ export const analyzeRecipeWithGemini = async (
     return result;
 };
 
-
 export const generateShoppingListWithGemini = async (allIngredients: string): Promise<{ category: string; items: string[] }[]> => {
     const prompt = `
         Given the following list of ingredients from multiple recipes, create a categorized shopping list.
@@ -112,15 +103,10 @@ export const generateShoppingListWithGemini = async (allIngredients: string): Pr
         ---
 
         Return the result as a JSON array of objects, where each object has a "category" and an "items" array.
-        Example format:
-        [
-            { "category": "Produce", "items": ["onion", "garlic", "bell pepper"] },
-            { "category": "Dairy & Eggs", "items": ["eggs", "milk", "cheddar cheese"] }
-        ]
     `;
 
     const response = await ai.models.generateContent({
-        model,
+        model: PRO_MODEL,
         contents: prompt,
         config: {
             responseMimeType: "application/json",
@@ -142,7 +128,6 @@ export const generateShoppingListWithGemini = async (allIngredients: string): Pr
     });
 
     const result = parseJsonGracefully<{ category: string; items: string[] }[]>(response.text);
-
     if (!result) {
         throw new Error("AI response for shopping list was not valid JSON.");
     }
@@ -151,12 +136,12 @@ export const generateShoppingListWithGemini = async (allIngredients: string): Pr
 
 export const categorizeShoppingItemWithGemini = async (itemName: string): Promise<string> => {
     const prompt = `
-        Categorize the grocery item "${itemName}" into a logical supermarket category (e.g., Produce, Dairy & Eggs, Meat & Seafood, Pantry, Bakery, Spices, Frozen, Beverages, Household, Other).
+        Categorize the grocery item "${itemName}" into a logical supermarket category.
         Return a JSON object with a single key "category".
     `;
 
     const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash", // Use flash for low latency
+        model: FLASH_MODEL,
         contents: prompt,
         config: {
             responseMimeType: "application/json",
@@ -178,33 +163,19 @@ export const parseRecipeFromTextWithGemini = async (text: string, availableTags:
     const prompt = `
         Extract recipe information from the following text.
         Identify the recipe name, ingredients, instructions, and number of servings.
-        Also, based on the recipe, suggest a few relevant tags from the provided list.
+        Also, suggest relevant tags from: ${availableTags.join(', ')}
 
-        Available Tags: ${availableTags.join(', ')}
-
-        Text to parse:
+        Text:
         ---
         ${text.substring(0, 15000)}
         ---
         
-        CRITICAL FORMATTING RULES:
-        - The 'ingredients' and 'instructions' strings MUST have each item on a new line, separated by a '\\n' character.
-        - DO NOT include markdown checkboxes like '- [ ]' in the ingredients or instructions.
-        - DO NOT return ingredients or instructions as a single run-on sentence.
-
-        Return the result in JSON format with the following structure:
-        {
-            "name": "string",
-            "ingredients": "string (MUST be newline-separated)",
-            "instructions": "string (MUST be newline-separated)",
-            "tags": ["string"],
-            "category": "string",
-            "servings": number
-        }
+        CRITICAL: Each ingredient/instruction step must be on a new line (\n).
+        Return JSON structure: { name, ingredients, instructions, tags, category, servings }
     `;
 
     const response = await ai.models.generateContent({
-        model,
+        model: PRO_MODEL,
         contents: prompt,
         config: {
             responseMimeType: "application/json",
@@ -214,10 +185,7 @@ export const parseRecipeFromTextWithGemini = async (text: string, availableTags:
                     name: { type: Type.STRING },
                     ingredients: { type: Type.STRING },
                     instructions: { type: Type.STRING },
-                    tags: {
-                        type: Type.ARRAY,
-                        items: { type: Type.STRING }
-                    },
+                    tags: { type: Type.ARRAY, items: { type: Type.STRING } },
                     category: { type: Type.STRING, enum: Object.values(RecipeCategory) },
                     servings: { type: Type.NUMBER },
                 },
@@ -227,34 +195,20 @@ export const parseRecipeFromTextWithGemini = async (text: string, availableTags:
     });
 
     const result = parseJsonGracefully<GeneratedRecipeData>(response.text);
-    if (!result) {
-        throw new Error("AI could not parse recipe from text.");
-    }
-
+    if (!result) throw new Error("AI could not parse recipe from text.");
     return result;
 };
 
 export const suggestNutritionGoalsWithGemini = async (
-    gender: 'male' | 'female',
-    age: number,
-    height: number,
-    weight: number,
-    activityLevel: 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active'
+    gender: 'male' | 'female', age: number, height: number, weight: number, activityLevel: string
 ): Promise<NutritionGoals> => {
     const prompt = `
-        Calculate estimated daily caloric needs and suggest macronutrient percentages (protein, carbs, fat) for a person with the following characteristics for weight maintenance.
-        - Gender: ${gender}
-        - Age: ${age} years
-        - Height: ${height} cm
-        - Weight: ${weight} kg
-        - Activity Level: ${activityLevel}
-
-        Return a JSON object with "calories" (number), "protein" (percentage), "carbs" (percentage), and "fat" (percentage).
-        The percentages should sum to 100. A balanced diet is preferred (e.g., 30% protein, 40% carbs, 30% fat).
+        Calculate daily caloric needs and macronutrient percentages for: ${gender}, ${age}y, ${height}cm, ${weight}kg, Activity: ${activityLevel}.
+        Return JSON: { calories, protein, carbs, fat }
     `;
 
     const response = await ai.models.generateContent({
-        model,
+        model: FLASH_MODEL,
         contents: prompt,
         config: {
             responseMimeType: "application/json",
@@ -272,43 +226,23 @@ export const suggestNutritionGoalsWithGemini = async (
     });
 
     const result = parseJsonGracefully<NutritionGoals>(response.text);
-    if (!result) {
-        throw new Error("AI could not suggest nutrition goals.");
-    }
-
+    if (!result) throw new Error("AI could not suggest nutrition goals.");
     return result;
 };
 
 export const generateRecipeFromIdeaWithGemini = async (
-    idea: string,
-    category: RecipeCategory,
-    availableTags: RecipeTag[],
-    blacklistedIngredients: string[]
+    idea: string, category: RecipeCategory, availableTags: RecipeTag[], blacklistedIngredients: string[]
 ): Promise<GeneratedRecipeData> => {
-    let blacklistInstruction = '';
-    if (blacklistedIngredients.length > 0) {
-        blacklistInstruction = `CRITICAL RULE: DO NOT use any of the following ingredients in the recipe: ${blacklistedIngredients.join(', ')}.`;
-    }
-
+    const blacklist = blacklistedIngredients.length > 0 ? `DO NOT USE: ${blacklistedIngredients.join(', ')}.` : '';
     const prompt = `
-        Create a full recipe based on the following idea: "${idea}".
-        The recipe should be for the "${category}" category.
-        Provide a creative name, a list of ingredients, step-by-step instructions, and the number of servings this recipe makes.
-        Also, suggest a few relevant tags from the provided list.
-
-        Available Tags: ${availableTags.join(', ')}
-
-        ${blacklistInstruction}
-
-        CRITICAL FORMATTING RULES:
-        - The 'ingredients' and 'instructions' strings MUST have each item on a new line, separated by a '\\n' character.
-        - DO NOT include markdown checkboxes like '- [ ]' in the ingredients or instructions.
-        - DO NOT return ingredients or instructions as a single run-on sentence.
-
-        Return a JSON object with "name", "ingredients", "instructions", "category", "tags", and "servings".
+        Create a recipe for "${idea}" in "${category}".
+        Tags: ${availableTags.join(', ')}
+        ${blacklist}
+        Ingredients/Instructions: \n separated.
+        Return JSON: { name, ingredients, instructions, category, tags, servings }
     `;
     const response = await ai.models.generateContent({
-        model,
+        model: PRO_MODEL,
         contents: prompt,
         config: {
             responseMimeType: "application/json",
@@ -319,10 +253,7 @@ export const generateRecipeFromIdeaWithGemini = async (
                     ingredients: { type: Type.STRING },
                     instructions: { type: Type.STRING },
                     category: { type: Type.STRING, enum: Object.values(RecipeCategory) },
-                    tags: {
-                        type: Type.ARRAY,
-                        items: { type: Type.STRING }
-                    },
+                    tags: { type: Type.ARRAY, items: { type: Type.STRING } },
                     servings: { type: Type.NUMBER },
                 },
                 required: ["name", "ingredients", "instructions", "category", "tags", "servings"],
@@ -331,102 +262,8 @@ export const generateRecipeFromIdeaWithGemini = async (
     });
 
     const result = parseJsonGracefully<GeneratedRecipeData>(response.text);
-    if (!result) {
-        throw new Error("AI could not generate a recipe from the idea.");
-    }
+    if (!result) throw new Error("AI could not generate a recipe from idea.");
     return result;
-};
-
-export const generateMealPlanWithGemini = async (
-    settings: Settings,
-    allRecipes: Recipe[],
-): Promise<MealPlan> => {
-
-    const recipesString = JSON.stringify(
-        allRecipes.map(r => ({ 
-            id: r.id, 
-            name: r.name, 
-            category: r.category, 
-            tags: r.tags, 
-            macros: r.macros,
-            rating: r.rating,
-        }))
-    );
-    
-    let blacklistInstruction = '';
-    if (settings.blacklistedIngredients.length > 0) {
-        blacklistInstruction = `8. CRITICAL: Avoid selecting recipes that contain these ingredients: ${settings.blacklistedIngredients.join(', ')}. You must adhere to this blacklist.`;
-    }
-
-    const prompt = `
-        You are a meal planning expert. Create a ${settings.planDurationWeeks}-week meal plan based on the user's settings and available recipes.
-        
-        Settings:
-        - Number of People: ${settings.numberOfPeople}
-        - Meals per week:
-            - Weekday Breakfasts: ${settings.mealsPerWeek.weekdayBreakfasts}
-            - Weekend Breakfasts: ${settings.mealsPerWeek.weekendBreakfasts}
-            - Weekday Dinners: ${settings.mealsPerWeek.weekdayDinners}
-            - Weekend Dinners: ${settings.mealsPerWeek.weekendDinners}
-            - Weekday Snacks: ${settings.mealsPerWeek.weekdaySnacks}
-            - Weekend Snacks: ${settings.mealsPerWeek.weekendSnacks}
-        - Person 1 Goals: ${JSON.stringify(settings.people[0].goals)}
-        - Dinner Servings: ${settings.servingsPerPerson} (if > 1, use leftovers for lunches)
-        - Leftover Strategy: ${settings.leftoverStrategy}
-
-        Generation Tags (use these to guide recipe selection):
-        - Weekday Dinner: ${settings.generationTags.weekdayDinner.join(', ')}
-        - Weekend Dinner: ${settings.generationTags.weekendDinner.join(', ')}
-        - Weekday Breakfast: ${settings.generationTags.weekdayBreakfast.join(', ')}
-        - Weekend Breakfast: ${settings.generationTags.weekendBreakfast.join(', ')}
-        - Weekday Snack: ${settings.generationTags.weekdaySnack.join(', ')}
-        - Weekend Snack: ${settings.generationTags.weekendSnack.join(', ')}
-
-        Available Recipes (JSON format):
-        ${recipesString.substring(0, 20000)}
-
-        RULES:
-        1. Start the plan from tomorrow's date. Today is ${new Date().toISOString().split('T')[0]}.
-        2. Adhere to the number of meals per week specified in the settings.
-        3. Prioritize recipes with higher ratings.
-        4. Use the "Generation Tags" to select appropriate meals (e.g., use 'easy to cook' recipes for weekday dinners).
-        5. For dinners, if 'servingsPerPerson' is > 1, use the same dinner recipe for a lunch according to the 'leftoverStrategy'. If strategy is 'random', place it on any subsequent day that needs a lunch. If 'next_day', place it on the following day's lunch.
-        6. Create a varied plan, avoiding repeating the same meal too often within the same week.
-        7. Try to meet the nutritional goals for the people, especially Person 1.
-        ${blacklistInstruction}
-        9. The output MUST be a valid JSON object. The keys should be date strings in "YYYY-MM-DD" format, and the values should be objects containing the recipe ID for "breakfast", "lunch", "dinner", and/or "snack".
-        
-        Example Output Format:
-        {
-            "2024-08-15": { "breakfast": "recipe-id-1", "lunch": "recipe-id-2", "dinner": "recipe-id-3" },
-            "2024-08-16": { "breakfast": "recipe-id-4", "lunch": "recipe-id-3", "snack": "recipe-id-5" } 
-        }
-    `;
-
-    const response = await ai.models.generateContent({
-        model,
-        contents: prompt,
-    });
-    
-    const result = parseJsonGracefully<Record<string, { [key in MealType]?: string }>>(response.text);
-
-    if (!result) {
-        throw new Error("AI could not generate a valid meal plan.");
-    }
-    
-    const recipeMap = new Map(allRecipes.map(r => [r.id, r]));
-    const newMealPlan: MealPlan = new Map();
-
-    for (const [dateString, dayPlanIds] of Object.entries(result)) {
-        const plannedDay: PlannedMeal = {};
-        if (dayPlanIds.breakfast) plannedDay.breakfast = recipeMap.get(dayPlanIds.breakfast);
-        if (dayPlanIds.lunch) plannedDay.lunch = recipeMap.get(dayPlanIds.lunch);
-        if (dayPlanIds.dinner) plannedDay.dinner = recipeMap.get(dayPlanIds.dinner);
-        if (dayPlanIds.snack) plannedDay.snack = recipeMap.get(dayPlanIds.snack);
-        newMealPlan.set(dateString, plannedDay);
-    }
-    
-    return newMealPlan;
 };
 
 const bulkRecipeResponseSchema = {
@@ -434,15 +271,11 @@ const bulkRecipeResponseSchema = {
     items: {
         type: Type.OBJECT,
         properties: {
-            name: { type: Type.STRING, description: "The name of the recipe." },
-            ingredients: { type: Type.STRING, description: "The full list of ingredients. CRITICAL: Each ingredient must be on a new line, separated by a '\\n' character." },
-            instructions: { type: Type.STRING, description: "The cooking instructions. CRITICAL: Each step must be on a new line, separated by a '\\n' character." },
-            category: { type: Type.STRING, enum: Object.values(RecipeCategory), description: "The recipe category." },
-            tags: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING },
-                description: "Relevant tags from the provided list."
-            },
+            name: { type: Type.STRING },
+            ingredients: { type: Type.STRING },
+            instructions: { type: Type.STRING },
+            category: { type: Type.STRING, enum: Object.values(RecipeCategory) },
+            tags: { type: Type.ARRAY, items: { type: Type.STRING } },
             macros: {
                 type: Type.OBJECT,
                 properties: {
@@ -452,147 +285,91 @@ const bulkRecipeResponseSchema = {
                     fat: { type: Type.NUMBER },
                 },
                 required: ["calories", "protein", "carbs", "fat"],
-                description: "Nutritional information for a single serving."
             },
-            healthScore: { type: Type.NUMBER, description: "A health score from 1 to 10." },
-            scoreReasoning: { type: Type.STRING, description: "A brief reason for the health score." },
-            servings: { type: Type.NUMBER, description: "The number of servings this recipe makes." },
+            healthScore: { type: Type.NUMBER },
+            scoreReasoning: { type: Type.STRING },
+            servings: { type: Type.NUMBER },
         },
         required: ["name", "ingredients", "instructions", "category", "tags", "macros", "healthScore", "scoreReasoning", "servings"],
     }
 };
 
-export const bulkParseRecipesFromFileWithGemini = async (file: File, availableTags: RecipeTag[], blacklistedIngredients: string[]): Promise<BulkParsedRecipe[]> => {
+export const bulkParseRecipesFromFileWithGemini = async (
+    file: File, 
+    availableTags: RecipeTag[], 
+    blacklistedIngredients: string[],
+    targetServings: number,
+    nutritionGoals: NutritionGoals
+): Promise<BulkParsedRecipe[]> => {
     const filePart = await fileToGenerativePart(file);
-
-    let blacklistInstruction = '';
-    if (blacklistedIngredients.length > 0) {
-        blacklistInstruction = `CRITICAL RULE: If any recipe contains one of the following ingredients, DO NOT include it in your output: ${blacklistedIngredients.join(', ')}.`;
-    }
+    const blacklist = blacklistedIngredients.length > 0 ? `DO NOT INCLUDE recipes with: ${blacklistedIngredients.join(', ')}.` : '';
 
     const prompt = `
-        You are an expert recipe parser. Analyze the attached file (${file.name}) which contains one or more recipes.
-        The file could be a text document, a PDF with text, or even a scanned PDF with images of recipes.
-        Your task is to extract every complete recipe you find into a structured JSON object.
-
-        For each recipe, you must identify:
-        1. The name.
-        2. The ingredients.
-        3. The instructions.
-        4. A suitable category from this list: ${Object.values(RecipeCategory).join(', ')}.
-        5. A few relevant tags for each recipe from this list: ${availableTags.join(', ')}.
-        6. An estimated nutritional analysis for a single serving (macros).
-        7. A health score from 1 to 10 and a brief reasoning.
-        8. The number of servings the recipe makes.
-
-        ${blacklistInstruction}
-
-        CRITICAL FORMATTING RULES:
-        - The 'ingredients' and 'instructions' strings MUST have each item on a new line, separated by a '\\n' character.
-        - DO NOT include markdown checkboxes like '- [ ]' in the ingredients or instructions.
-        - DO NOT use commas or run-on sentences for lists.
-
-        Return the result as a single JSON array, where each element is a recipe object.
-        Only include full recipes with ingredients and instructions. Ignore any partial recipes or non-recipe text.
+        Analyze the attached file and extract EVERY recipe. 
+        CRITICAL REQUIREMENTS:
+        1. MANDATORY SERVINGS: Scale all ingredient quantities so each recipe makes EXACTLY ${targetServings} servings.
+        2. NUTRITION GUIDANCE: Note user goals (${JSON.stringify(nutritionGoals)}) to ensure macro estimates are accurate.
+        3. ${blacklist}
+        4. Extract ALL recipes, do not skip any.
+        5. Formatting: Ingredients/Instructions MUST be \n separated.
+        
+        Return a JSON array of objects.
     `;
 
     const response = await ai.models.generateContent({
-        model,
+        model: PRO_MODEL,
         contents: [ { parts: [ { text: prompt } ] }, { parts: [ filePart ] } ],
         config: {
             responseMimeType: "application/json",
             responseSchema: bulkRecipeResponseSchema,
-            thinkingConfig: { thinkingBudget: 32768 },
+            maxOutputTokens: 20000,
+            thinkingConfig: { thinkingBudget: 4000 },
         },
     });
 
     const result = parseJsonGracefully<BulkParsedRecipe[]>(response.text);
-    if (!result) {
-        throw new Error("AI could not parse any recipes from the provided file.");
-    }
-
+    if (!result) throw new Error("AI could not parse recipes from file.");
     return result;
 };
 
-
-export const bulkGenerateAndAnalyzeRecipesWithGemini = async (ideas: string[], category: RecipeCategory, availableTags: RecipeTag[], blacklistedIngredients: string[]): Promise<BulkParsedRecipe[]> => {
-    let blacklistInstruction = '';
-    if (blacklistedIngredients.length > 0) {
-        blacklistInstruction = `CRITICAL RULE: DO NOT use any of the following ingredients in the recipes you generate: ${blacklistedIngredients.join(', ')}.`;
-    }
+export const bulkGenerateAndAnalyzeRecipesWithGemini = async (
+    ideas: string[], 
+    category: RecipeCategory, 
+    availableTags: RecipeTag[], 
+    blacklistedIngredients: string[],
+    targetServings: number,
+    nutritionGoals: NutritionGoals
+): Promise<BulkParsedRecipe[]> => {
+    const blacklist = blacklistedIngredients.length > 0 ? `DO NOT USE: ${blacklistedIngredients.join(', ')}.` : '';
     
     const prompt = `
-        For each of the following meal ideas, generate a full recipe.
+        Generate ${ideas.length} full recipes for these ideas:
+        ${ideas.join('\n')}
+
+        CRITICAL CONSTRAINTS:
+        1. SERVINGS: Each recipe MUST be formulated for EXACTLY ${targetServings} servings. Calculate ingredient amounts accordingly.
+        2. HEALTH GOALS: Adhere to user goals (${JSON.stringify(nutritionGoals)}). Favor ingredients that align with these macros.
+        3. CATEGORY: All must be "${category}".
+        4. TAGS: Use from ${availableTags.join(', ')}.
+        5. ${blacklist}
         
-        Meal Ideas:
-        - ${ideas.join('\n- ')}
-
-        For each generated recipe, you must provide:
-        1. A creative name.
-        2. A list of ingredients.
-        3. Step-by-step instructions.
-        4. The category should be "${category}".
-        5. A few relevant tags from this list: ${availableTags.join(', ')}.
-        6. An estimated nutritional analysis for a single serving (macros).
-        7. A health score from 1 to 10 and a brief reasoning.
-        8. The number of servings the recipe makes.
-        
-        ${blacklistInstruction}
-
-        CRITICAL FORMATTING RULES:
-        - The 'ingredients' and 'instructions' strings MUST have each item on a new line, separated by a '\\n' character.
-        - DO NOT include markdown checkboxes like '- [ ]' in the ingredients or instructions.
-        - DO NOT use commas or run-on sentences for lists.
-
-        Return the result as a single JSON array, where each element is a recipe object corresponding to one of the ideas.
+        Return a JSON array.
     `;
     
     const response = await ai.models.generateContent({
-        model,
+        model: PRO_MODEL,
         contents: prompt,
         config: {
             responseMimeType: "application/json",
             responseSchema: bulkRecipeResponseSchema,
-            thinkingConfig: { thinkingBudget: 32768 },
+            maxOutputTokens: 20000,
+            thinkingConfig: { thinkingBudget: 4000 },
         },
     });
 
     const result = parseJsonGracefully<BulkParsedRecipe[]>(response.text);
-    if (!result) {
-        throw new Error("AI could not generate recipes from the ideas.");
-    }
-    
+    if (!result) throw new Error("AI could not generate recipes from ideas.");
     return result;
-}
-
-const singleRecipeSchema = {
-    type: Type.OBJECT,
-    properties: {
-        name: { type: Type.STRING, description: "The name of the recipe." },
-        ingredients: { type: Type.STRING, description: "The full list of ingredients. CRITICAL: Each ingredient must be on a new line, separated by a '\\n' character." },
-        instructions: { type: Type.STRING, description: "The cooking instructions. CRITICAL: Each step must be on a new line, separated by a '\\n' character." },
-        category: { type: Type.STRING, enum: Object.values(RecipeCategory), description: "The recipe category." },
-        tags: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-            description: "Relevant tags from the provided list."
-        },
-        macros: {
-            type: Type.OBJECT,
-            properties: {
-                calories: { type: Type.NUMBER },
-                protein: { type: Type.NUMBER },
-                carbs: { type: Type.NUMBER },
-                fat: { type: Type.NUMBER },
-            },
-            required: ["calories", "protein", "carbs", "fat"],
-            description: "Nutritional information for a single serving."
-        },
-        healthScore: { type: Type.NUMBER, description: "A health score from 1 to 10." },
-        scoreReasoning: { type: Type.STRING, description: "A brief reason for the health score." },
-        servings: { type: Type.NUMBER, description: "The number of servings this recipe now makes." },
-    },
-    required: ["name", "ingredients", "instructions", "category", "tags", "macros", "healthScore", "scoreReasoning", "servings"],
 };
 
 export const editRecipeWithGemini = async (
@@ -605,54 +382,31 @@ export const editRecipeWithGemini = async (
         (DEFAULT_ALL_TAGS[cat] || []).forEach(tag => allAvailableTags.add(tag));
     });
 
-    let blacklistInstruction = '';
-    if (blacklistedIngredients.length > 0) {
-        blacklistInstruction = `CRITICAL RULE: DO NOT use or introduce any of the following ingredients: ${blacklistedIngredients.join(', ')}. If the original recipe contains one of these, you must try to substitute it with something appropriate.`;
-    }
+    const blacklist = blacklistedIngredients.length > 0 ? `DO NOT USE: ${blacklistedIngredients.join(', ')}.` : '';
 
     const prompt = `
-        You are an expert recipe editor. A user wants to modify an existing recipe.
-        Apply the user's requested changes to the original recipe provided below.
-
-        Original Recipe Name: ${originalRecipe.name}
-        Original Servings: ${originalRecipe.servings}
-        Original Ingredients:
-        ${originalRecipe.ingredients}
-        Original Instructions:
-        ${originalRecipe.instructions}
-
-        User's Edit Request: "${editRequest}"
-
-        Your task is to:
-        1.  Modify the recipe's name, ingredients, instructions, and servings based on the request. For example, if they ask for more servings, adjust ingredient quantities and update the 'servings' field. If they ask to substitute an ingredient, update it in both the ingredients list and instructions.
-        2.  Re-analyze the *new* recipe to provide an estimated nutritional analysis (macros) for a single serving.
-        3.  Provide a new health score (1-10) and a brief reasoning for the new version.
-        4.  Suggest relevant tags from this list: ${Array.from(allAvailableTags).join(', ')}.
-        5.  Assign a category. The original category was "${originalRecipe.category}". Change it only if the edit makes it necessary.
-        
-        ${blacklistInstruction}
-
-        CRITICAL FORMATTING RULES:
-        - The 'ingredients' and 'instructions' strings MUST have each item on a new line, separated by a '\\n' character.
-        - DO NOT include markdown checkboxes like '- [ ]' in the ingredients or instructions.
-
-        Return a single JSON object with the updated recipe details.
+        Edit this recipe: ${JSON.stringify(originalRecipe)}
+        Request: "${editRequest}"
+        ${blacklist}
+        Re-analyze macros, health score, and suggest tags.
+        Return a single JSON object.
     `;
 
     const response = await ai.models.generateContent({
-        model,
+        model: PRO_MODEL,
         contents: prompt,
         config: {
             responseMimeType: "application/json",
-            responseSchema: singleRecipeSchema
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: bulkRecipeResponseSchema.items.properties,
+                required: bulkRecipeResponseSchema.items.required,
+            }
         }
     });
 
     const result = parseJsonGracefully<BulkParsedRecipe>(response.text);
-    if (!result) {
-        throw new Error("AI could not edit the recipe.");
-    }
-
+    if (!result) throw new Error("AI could not edit the recipe.");
     return result;
 };
 
@@ -660,41 +414,12 @@ export const checkForDuplicatesWithGemini = async (
     newRecipe: Omit<Recipe, 'id' | 'rating' | 'macros' | 'healthScore' | 'scoreReasoning'>,
     existingRecipes: Recipe[]
 ): Promise<{ isDuplicate: boolean; similarRecipeName: string | null; reasoning: string }> => {
-    if (existingRecipes.length === 0) {
-        return { isDuplicate: false, similarRecipeName: null, reasoning: "No existing recipes to compare against." };
-    }
-
-    const existingRecipeNames = existingRecipes.map(r => r.name).join('; ');
-
-    const prompt = `
-        You are a meticulous recipe duplicate detector. Your task is to determine if a new recipe is a duplicate of an existing one. Be very strict. Only flag a recipe as a duplicate if it is almost identical.
-
-        CRITERIA FOR NOT BEING A DUPLICATE:
-        - If the recipe names are significantly different (e.g., "Spicy Chicken Tacos" vs. "Easy Beef Burritos").
-        - If the primary protein source is different (e.g., chicken vs. beef, tofu vs. fish).
-        - If the core ingredients or cooking method are fundamentally different.
-
-        A recipe IS a duplicate ONLY IF:
-        - It has a very similar name AND the ingredients list is substantially the same, even with minor variations in quantity or wording (e.g., "Grandma's Chicken Soup" vs. "Classic Chicken Noodle Soup" with the same ingredients).
-
-        New Recipe Name: ${newRecipe.name}
-        New Recipe Ingredients:
-        ${newRecipe.ingredients}
-
-        List of Existing Recipe Names:
-        ${existingRecipeNames.substring(0, 10000)}
-
-        Is the new recipe a duplicate of any in the existing list?
-        Return your answer as a JSON object with this exact structure:
-        {
-          "isDuplicate": boolean,
-          "similarRecipeName": "string" | null (the name of the most similar existing recipe if it's a duplicate, otherwise null),
-          "reasoning": "string" (a brief explanation for your decision)
-        }
-    `;
+    if (existingRecipes.length === 0) return { isDuplicate: false, similarRecipeName: null, reasoning: "" };
+    const names = existingRecipes.map(r => r.name).join('; ');
+    const prompt = `Check if "${newRecipe.name}" is a duplicate of: ${names.substring(0, 10000)}. Return JSON.`;
 
     const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash", // Use flash for this simpler, faster task
+        model: FLASH_MODEL,
         contents: prompt,
         config: {
             responseMimeType: "application/json",
@@ -711,59 +436,71 @@ export const checkForDuplicatesWithGemini = async (
     });
 
     const result = parseJsonGracefully<{ isDuplicate: boolean; similarRecipeName: string | null; reasoning: string }>(response.text);
-    if (!result) {
-        // Default to not a duplicate if AI fails
-        return { isDuplicate: false, similarRecipeName: null, reasoning: "AI analysis failed." };
-    }
-
-    return result;
+    return result || { isDuplicate: false, similarRecipeName: null, reasoning: "" };
 };
 
 export const generateShoppingAgentInstructions = async (
-    store: string,
-    service: string,
-    datetime: string,
-    items: string[],
-    goalsDescription: string
+    store: string, service: string, datetime: string, items: string[], goalsDescription: string
 ): Promise<string> => {
+    const prompt = `Write agent instructions for shopping at ${store} (${service}) at ${datetime}. List: ${items.join(', ')}. Goals: ${goalsDescription}.`;
+    const response = await ai.models.generateContent({ model: PRO_MODEL, contents: prompt });
+    return response.text;
+}
+
+// Fix: Implement missing generateMealPlanWithGemini function to select recipes for a given duration.
+export const generateMealPlanWithGemini = async (settings: Settings, recipes: Recipe[]): Promise<MealPlan> => {
+    const recipeOptions = recipes.map(r => ({ id: r.id, name: r.name, category: r.category, tags: r.tags }));
     const prompt = `
-        Write a clear, detailed, and precise instruction for an autonomous AI Agent that operates a web browser.
-        The user wants the agent to shop for groceries.
+        Generate a healthy meal plan for ${settings.planDurationWeeks} week(s).
+        Settings: ${JSON.stringify(settings)}
+        Available Recipes: ${JSON.stringify(recipeOptions)}
 
-        **Task Details:**
-        - **Store:** ${store}
-        - **Service Type:** ${service}
-        - **Timing:** ${datetime}
-        - **Shopping List:**
-          ${items.map(i => `- ${i}`).join('\n')}
+        Return a JSON array where each object represents one day, including:
+        - "date": string (YYYY-MM-DD)
+        - "breakfastId": string (selected recipe ID)
+        - "lunchId": string (selected recipe ID, typically a leftover dinner)
+        - "dinnerId": string (selected recipe ID)
+        - "snackId": string (selected recipe ID)
 
-        **Agent Constraints & Preferences:**
-        - **Price Sensitivity:** Low-Medium (look for value/sales).
-        - **Health Focus:** Medium-High (prioritize healthier options).
-        - **Household Health Goals:** ${goalsDescription}.
-        - **Recipe Context:** The items are for specific recipes matching these goals.
-
-        **Agent Execution Workflow (Must be included in instructions):**
-        1. Navigate to the grocery store website.
-        2. **CRITICAL STEP:** Check if the user is logged in. If not, explicitly instruct the user to log in and PAUSE until they confirm they are logged in. Do not proceed until logged in.
-        3. Search for and add the listed items to the cart. When selecting specific products, use the Price and Health constraints to make the best choice.
-        4. Navigate to checkout/cart.
-        5. Select the specified Service Type (${service}) and Time (${datetime}).
-        6. **CRITICAL STEP:** Display the final cart to the user with the delivery/pickup details selected.
-        7. **PAUSE** and ask the user for confirmation.
-        8. Allow the user to either:
-           - Confirm and pay manually.
-           - Instruct the Agent to make changes (add/remove items, change time).
-           - Do NOT finalize payment automatically unless explicitly authorized by a subsequent user command (though usually the user will pay manually).
-
-        **Output Format:**
-        Return ONLY the instruction text for the Agent. Do not include conversational filler like "Here is your instruction". Start directly with "Act as an autonomous shopping agent..."
+        Ensure recipe categories and tags match the settings requirements for weekdays/weekends.
     `;
 
     const response = await ai.models.generateContent({
-        model,
+        model: FLASH_MODEL,
         contents: prompt,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        date: { type: Type.STRING },
+                        breakfastId: { type: Type.STRING },
+                        lunchId: { type: Type.STRING },
+                        dinnerId: { type: Type.STRING },
+                        snackId: { type: Type.STRING },
+                    },
+                    required: ["date"],
+                }
+            }
+        }
     });
 
-    return response.text;
-}
+    const parsedPlan = parseJsonGracefully<any[]>(response.text);
+    const plan: MealPlan = new Map();
+
+    if (parsedPlan) {
+        parsedPlan.forEach(day => {
+            const plannedDay: PlannedMeal = {
+                breakfast: recipes.find(r => r.id === day.breakfastId),
+                lunch: recipes.find(r => r.id === day.lunchId),
+                dinner: recipes.find(r => r.id === day.dinnerId),
+                snack: recipes.find(r => r.id === day.snackId),
+            };
+            plan.set(day.date, plannedDay);
+        });
+    }
+
+    return plan;
+};

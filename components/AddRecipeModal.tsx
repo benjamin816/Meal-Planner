@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Recipe, RecipeCategory, RecipeTag, GeneratedRecipeData, Settings, BulkParsedRecipe } from '../types';
 import { LoadingIcon, XIcon, ImportIcon, MagicWandIcon } from './Icons';
@@ -42,22 +41,37 @@ const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
 
   // --- Populating Form Data ---
   useEffect(() => {
-    const data = recipeToEdit || prefilledData;
-    if (data) {
-        setName(data.name);
-        setCategory(data.category);
-        setTags(data.tags);
-        setIngredients(data.ingredients);
-        setInstructions(data.instructions);
-        setServings(data.servings || 4);
-        if ('macros' in data) { // Check if it's a full Recipe or BulkParsedRecipe
-            setMacros(data.macros);
-            setHealthScore(data.healthScore);
-            setScoreReasoning(data.scoreReasoning);
+    // Fix: Properly handle type narrowing for initial data population to avoid TS errors
+    if (recipeToEdit) {
+        setName(recipeToEdit.name);
+        setCategory(recipeToEdit.category);
+        setTags(recipeToEdit.tags);
+        setIngredients(recipeToEdit.ingredients);
+        setInstructions(recipeToEdit.instructions);
+        setServings(recipeToEdit.servings || 4);
+        setMacros(recipeToEdit.macros);
+        setHealthScore(recipeToEdit.healthScore);
+        setScoreReasoning(recipeToEdit.scoreReasoning);
+        setRating(recipeToEdit.rating || 5);
+        setIsAlsoBreakfast(recipeToEdit.isAlsoBreakfast || false);
+    } else if (prefilledData) {
+        setName(prefilledData.name);
+        setCategory(prefilledData.category);
+        setTags(prefilledData.tags);
+        setIngredients(prefilledData.ingredients);
+        setInstructions(prefilledData.instructions);
+        setServings(prefilledData.servings || 4);
+        
+        // Use type assertion to access potential extended fields in prefilledData (like from BulkParsedRecipe)
+        const anyData = prefilledData as any;
+        if (anyData.macros) {
+            setMacros(anyData.macros);
+            setHealthScore(anyData.healthScore || 0);
+            setScoreReasoning(anyData.scoreReasoning || '');
         }
-        if ('rating' in data) { // Is a Recipe
-             setRating(data.rating || 5);
-             setIsAlsoBreakfast(data.isAlsoBreakfast || false);
+        if (anyData.rating !== undefined) {
+            setRating(anyData.rating);
+            setIsAlsoBreakfast(anyData.isAlsoBreakfast || false);
         }
     }
   }, [recipeToEdit, prefilledData]);
@@ -116,11 +130,12 @@ const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
       
       setIsGenerating(true);
       try {
-          const recipeForAi: Recipe = isEditMode ? {
+          // Fix: Use type assertion for temporary object to satisfy Recipe type requirements
+          const recipeForAi = (isEditMode ? {
               ...recipeToEdit, name, category, tags, ingredients, instructions, isAlsoBreakfast, rating, servings, macros, healthScore, scoreReasoning
-          } : { // Create a temporary recipe object for AI to edit
+          } : { 
               id: 'temp', name, category, tags, ingredients, instructions, isAlsoBreakfast, rating, servings, macros, healthScore, scoreReasoning
-          };
+          }) as Recipe;
           
           const result = await editRecipeWithGemini(recipeForAi, currentPrompt, settings.blacklistedIngredients);
           updateFormWithAiData(result);
