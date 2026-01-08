@@ -59,7 +59,12 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onBulkImport
         setEstTimeRemaining(25);
         if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
         countdownTimerRef.current = window.setInterval(() => {
-            setEstTimeRemaining(prev => (prev !== null && prev > 1) ? prev - 1 : prev);
+            setEstTimeRemaining(prev => {
+                if (prev === null) return null;
+                // Don't go to 0 until we actually finish
+                if (prev <= 1) return 1;
+                return prev - 1;
+            });
         }, 1000);
 
         try {
@@ -72,10 +77,11 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onBulkImport
                         setPercentage(pct);
                         
                         // Refine time estimate once Phase 2 (Individual processing) begins at 60%
-                        if (pct >= 60 && countdownTimerRef.current) {
-                            // Phase 2 estimate: ~2s per remaining work unit
-                            // We don't have the exact count here easily, so we just let it drift down
-                            // if needed, the parent can provide more info, but for now simple is better.
+                        if (pct >= 60 && pct < 100) {
+                            // As we process, we can estimate better based on progress
+                            // 1% progress after 60% is roughly 2-3 seconds per recipe.
+                            const remainingPct = 100 - pct;
+                            setEstTimeRemaining(Math.max(5, Math.ceil(remainingPct * 1.5)));
                         }
                     }
                 },
@@ -85,7 +91,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onBulkImport
                         setPercentage(100);
                         setSuccessCount(count);
                         if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
-                        setEstTimeRemaining(null);
+                        setEstTimeRemaining(0);
                     }
                 },
                 abortSignal.current
@@ -107,6 +113,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onBulkImport
     };
 
     const formatTime = (seconds: number) => {
+        if (seconds === 0) return "Finishing...";
         const m = Math.floor(seconds / 60);
         const s = seconds % 60;
         return `${m}:${s.toString().padStart(2, '0')}`;
@@ -176,30 +183,33 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onBulkImport
                     {(status === 'processing' || status === 'error' || status === 'success') && (
                          <div className="mt-4 p-5 bg-gray-50 rounded-xl border border-gray-200">
                             <div className="flex justify-between items-center mb-3">
-                                <p className="text-sm font-bold text-gray-800">
-                                    {status === 'success' ? 'Import Complete' : (status === 'error' ? 'Import Failed' : 'Importing Recipes...')}
-                                </p>
+                                <div className="flex flex-col">
+                                    <p className="text-sm font-bold text-gray-800">
+                                        {status === 'success' ? 'Import Complete' : (status === 'error' ? 'Import Failed' : 'Importing Recipes...')}
+                                    </p>
+                                    <p className="text-[10px] text-blue-600 font-bold uppercase tracking-wider">{percentage}% complete</p>
+                                </div>
                                 {status === 'processing' && estTimeRemaining !== null && (
-                                    <span className="text-xs font-mono text-gray-500 bg-white px-2 py-1 rounded border">
+                                    <span className="text-xs font-mono text-gray-500 bg-white px-2 py-1 rounded border shadow-sm">
                                         Est. {formatTime(estTimeRemaining)}
                                     </span>
                                 )}
                             </div>
 
                             {/* Progress Bar Container */}
-                            <div className="w-full bg-gray-200 rounded-full h-3 mb-3 overflow-hidden">
+                            <div className="w-full bg-gray-200 rounded-full h-3 mb-3 overflow-hidden shadow-inner">
                                 <div 
-                                    className={`h-full transition-all duration-700 ease-out ${status === 'error' ? 'bg-red-500' : (status === 'success' ? 'bg-green-500' : 'bg-blue-600')}`}
+                                    className={`h-full transition-all duration-700 ease-out relative ${status === 'error' ? 'bg-red-500' : (status === 'success' ? 'bg-green-500' : 'bg-blue-600')}`}
                                     style={{ width: `${percentage}%` }}
                                 >
-                                    <div className="w-full h-full opacity-30 bg-gradient-to-r from-transparent via-white to-transparent animate-pulse"></div>
+                                    <div className="absolute inset-0 w-full h-full opacity-30 bg-gradient-to-r from-transparent via-white to-transparent animate-pulse"></div>
                                 </div>
                             </div>
 
                             <div className="flex items-center text-sm text-gray-600">
                                 {status === 'processing' && <LoadingIcon className="w-4 h-4 mr-2" />}
                                 {status === 'success' && <CheckIcon className="w-4 h-4 mr-2 text-green-500" />}
-                                <span>{progressMessage}</span>
+                                <span className="truncate">{progressMessage}</span>
                             </div>
 
                             {status === 'success' && (
@@ -221,16 +231,16 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onBulkImport
                     <button 
                         type="button" 
                         onClick={handleCancelClose} 
-                        className="px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                        className="px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                     >
-                        {status === 'success' ? 'Close' : 'Cancel'}
+                        {status === 'success' ? 'Close' : 'Cancel Import'}
                     </button>
                     {status !== 'success' && status !== 'processing' && (
                         <button 
                             type="button" 
                             onClick={handleImport} 
                             disabled={!file} 
-                            className="px-4 py-2 bg-blue-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-blue-700 disabled:bg-blue-300 flex items-center"
+                            className="px-4 py-2 bg-blue-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-blue-700 disabled:bg-blue-300 flex items-center transition-all shadow-sm"
                         >
                             <UploadIcon className="w-4 h-4 mr-2" />
                             <span>Start Import</span>

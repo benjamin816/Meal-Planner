@@ -202,13 +202,20 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="bg-gray-100 min-h-screen font-sans">
-        <div className="container mx-auto p-4 md:p-6">
+    <div className="bg-gray-100 min-h-screen font-sans flex flex-col">
+        <div className="container mx-auto p-4 md:p-6 flex-grow">
             <Header activeTab={activeTab} setActiveTab={handleTabChange} />
             <main className="mt-6 bg-white p-6 rounded-lg shadow-sm">
                 <div key={animationKey} className="fade-in">{renderContent()}</div>
             </main>
         </div>
+        
+        {/* Version Footer */}
+        <footer className="container mx-auto px-4 md:px-6 pb-4 flex justify-between items-center text-[10px] text-gray-400 font-mono">
+            <div>v5</div>
+            <div>{new Date().toLocaleString()}</div>
+        </footer>
+
         {kitchenModeRecipe && <KitchenModeView recipe={kitchenModeRecipe} onClose={() => setKitchenModeRecipe(null)} settings={settings} onAdjustServings={async (r, s) => { setIsLoading(true); try { const prompt = `Scale to ${s} servings.`; return await editRecipeWithGemini(r, prompt, settings.blacklistedIngredients); } catch { return null; } finally { setIsLoading(false); } }} />}
         {editMealDetails && <EditMealModal onClose={() => setEditMealDetails(null)} onSave={(type, rec) => { setMealPlan(prev => { const newPlan = new Map(prev); const day = newPlan.get(editMealDetails.date); if (day) newPlan.set(editMealDetails.date, { ...day, [type]: rec }); return newPlan; }); setEditMealDetails(null); }} recipes={recipes} dayPlan={editMealDetails.plan} date={editMealDetails.date} />}
         {isAddRecipeModalOpen && <AddRecipeModal onClose={() => setIsAddRecipeModalOpen(false)} onAddRecipe={addRecipe} onUpdateRecipe={updateRecipe} isLoading={isLoading} allTags={allTags} recipeToEdit={recipeToEdit} settings={settings} />}
