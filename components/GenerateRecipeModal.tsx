@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { XIcon, LoadingIcon, MagicWandIcon } from './Icons';
 import { generateRecipeFromIdeaWithGemini } from '../services/geminiService';
@@ -25,9 +26,9 @@ const GenerateRecipeModal: React.FC<GenerateRecipeModalProps> = ({ onClose, onRe
         setError(null);
 
         try {
-            const availableTags = allTags[category] || [];
-            // Fix: Provide the missing `blacklistedIngredients` argument. An empty array is a safe default.
-            const recipeData = await generateRecipeFromIdeaWithGemini(idea, category, availableTags, []);
+            // Fix: generateRecipeFromIdeaWithGemini expects 3 arguments (idea, category, blacklistedIngredients). 
+            // The call was incorrectly passing 4 arguments.
+            const recipeData = await generateRecipeFromIdeaWithGemini(idea, category, []);
             onRecipeGenerated({ ...recipeData, category });
         } catch (err: any) {
             console.error(err);

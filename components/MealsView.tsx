@@ -5,7 +5,7 @@ import RecipeListView from './RecipeListView';
 import ImportRecipeModal from './ImportRecipeModal';
 import GenerateRecipeModal from './GenerateRecipeModal';
 import BulkImportModal from './BulkImportModal';
-import { PlusIcon, UploadIcon, ExportIcon } from './Icons';
+import { PlusIcon, UploadIcon, ExportIcon, MagicWandIcon } from './Icons';
 
 declare global {
   interface Window {
@@ -23,7 +23,6 @@ interface MealsViewProps {
   deleteAllRecipes: () => void;
   isLoading: boolean;
   allTags: Record<RecipeCategory, RecipeTag[]>;
-  // Fix: Added missing 'percentage' parameter to 'onProgress' to match signature in App.tsx and requirements of BulkImportModal
   bulkImportRecipes: (
     sourceFile: File,
     importMode: 'full_recipes' | 'meal_ideas',
@@ -34,6 +33,8 @@ interface MealsViewProps {
   onEnterKitchenMode: (recipe: Recipe) => void;
   handleEditRecipe: (recipe: Recipe) => void;
   onOpenAddRecipeModal: () => void;
+  onDetectSimilar: () => void;
+  onSetDefaultDrink?: (id: string) => void;
 }
 
 type ModalType = 'import' | 'generate' | 'bulk' | null;
@@ -41,7 +42,7 @@ type ModalType = 'import' | 'generate' | 'bulk' | null;
 const MealsView: React.FC<MealsViewProps> = ({ 
     recipes, addRecipe, updateRecipe, deleteRecipe, deleteAllRecipes, 
     isLoading, allTags, bulkImportRecipes, onEnterKitchenMode, handleEditRecipe,
-    onOpenAddRecipeModal
+    onOpenAddRecipeModal, onDetectSimilar, onSetDefaultDrink
 }) => {
     const [activeModal, setActiveModal] = useState<ModalType>(null);
     const [prefilledData, setPrefilledData] = useState<GeneratedRecipeData | null>(null);
@@ -61,10 +62,6 @@ const MealsView: React.FC<MealsViewProps> = ({
     
     const handleRecipeGenerated = (data: GeneratedRecipeData) => {
         setPrefilledData(data);
-        // This is a placeholder now, the main App component will handle modal switching
-        // For now, we assume the parent handles opening the AddRecipeModal with this data.
-        // A more robust solution might involve a callback here.
-        // For now, let's just close this and assume parent handles the next step.
         closeModal();
     };
 
@@ -111,9 +108,9 @@ const MealsView: React.FC<MealsViewProps> = ({
         y += 20;
 
         recipes.forEach((recipe, index) => {
-            if (recipe.baseRecipeId) return; // Only print base recipes in this export logic for now
+            if (recipe.baseRecipeId) return; // Only print base recipes
 
-            checkPageBreak(50); // Estimate for recipe header
+            checkPageBreak(60); // Estimate for recipe header
 
             // Recipe Name
             doc.setFontSize(18);
@@ -125,8 +122,13 @@ const MealsView: React.FC<MealsViewProps> = ({
             doc.setFontSize(10);
             doc.setFont('helvetica', 'italic');
             doc.setTextColor(100);
-            const tagText = `Category: ${recipe.category}  |  Tags: ${recipe.tags.join(', ')}`;
-            const splitTagText = doc.splitTextToSize(tagText, usableWidth);
+            const tags = recipe.tags || [];
+            
+            // Add metadata for AI detection upon re-import
+            const metaTag = `[META: intensity=${recipe.usageIntensity || 'normal'} healthScore=${recipe.healthScore || 5}]`;
+            const tagText = `Category: ${recipe.category}${tags.length > 0 ? `  |  Tags: ${tags.join(', ')}` : ''}  |  Intensity: ${recipe.usageIntensity || 'normal'}`;
+            
+            const splitTagText = doc.splitTextToSize(`${tagText}\n${metaTag}`, usableWidth);
             doc.text(splitTagText, margin, y);
             y += (splitTagText.length * 4) + 6;
             doc.setTextColor(0);
@@ -160,7 +162,6 @@ const MealsView: React.FC<MealsViewProps> = ({
             const instructionsLines = doc.splitTextToSize(recipe.instructions.replace(/\n/g, '\n\n'), usableWidth);
             instructionsLines.forEach((line: string, lineIndex: number) => {
                 checkPageBreak(5);
-                // Basic logic to add step numbers if they don't exist
                 const startsWithNumber = /^\d+\.\s/.test(line);
                 const lineContent = `${!startsWithNumber && line.trim() ? `${lineIndex + 1}. ` : ''}${line}`;
                 doc.text(lineContent, margin, y, { maxWidth: usableWidth });
@@ -183,14 +184,18 @@ const MealsView: React.FC<MealsViewProps> = ({
     <div>
         <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
             <h2 onClick={handleDevTitleClick} className="text-2xl font-bold text-gray-700 cursor-pointer" title="Developer options available...">My Recipes ({recipes.filter(r => !r.baseRecipeId).length})</h2>
-            <div className="flex items-center gap-x-2">
+            <div className="flex flex-wrap items-center justify-center gap-2">
+                 <button onClick={onDetectSimilar} disabled={isLoading || recipes.length < 2} className="flex items-center bg-purple-600 text-white px-4 py-2 rounded-lg shadow hover:bg-purple-700 disabled:bg-purple-300 transition-colors">
+                    <MagicWandIcon className="w-4 h-4" />
+                    <span className="ml-2 text-sm">Detect Duplicates</span>
+                </button>
                  <button onClick={() => setActiveModal('bulk')} className="flex items-center bg-green-600 text-white px-4 py-2 rounded-lg shadow hover:bg-green-700 disabled:bg-green-300 transition-colors">
                     <UploadIcon />
                     <span className="ml-2 text-sm">Bulk Import</span>
                 </button>
                  <button onClick={handleExportToPdf} className="flex items-center bg-gray-600 text-white px-4 py-2 rounded-lg shadow hover:bg-gray-700 disabled:bg-gray-300 transition-colors">
                     <ExportIcon />
-                    <span className="ml-2 text-sm">Export to PDF</span>
+                    <span className="ml-2 text-sm">PDF Export</span>
                 </button>
                 <button onClick={onOpenAddRecipeModal} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700 disabled:bg-blue-300 transition-colors">
                     <PlusIcon />
@@ -205,6 +210,7 @@ const MealsView: React.FC<MealsViewProps> = ({
             onAiEditRecipe={handleEditRecipe}
             onDeleteRecipe={handleDeleteRecipe}
             allTags={allTags}
+            onSetDefaultDrink={onSetDefaultDrink}
         />
 
         {activeModal === 'generate' && (

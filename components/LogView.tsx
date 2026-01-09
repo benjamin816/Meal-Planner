@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { EatenLog, MealPlan, Recipe, MealType } from '../types';
 
@@ -13,7 +12,6 @@ const LogView: React.FC<LogViewProps> = ({ eatenLog, mealPlan }) => {
         const entries: { date: string, mealType: MealType, recipe: Recipe }[] = [];
         
         // Sort dates descending
-        // Fix: The keys from eatenLog are of type unknown. Cast to string[] to allow sorting.
         const sortedDates = (Array.from(eatenLog.keys()) as string[]).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
         
         for (const dateString of sortedDates) {
@@ -36,10 +34,11 @@ const LogView: React.FC<LogViewProps> = ({ eatenLog, mealPlan }) => {
     
     const macroTotals = useMemo(() => {
         return loggedEntries.reduce((acc, entry) => {
-            acc.calories += entry.recipe.macros.calories;
-            acc.protein += entry.recipe.macros.protein;
-            acc.carbs += entry.recipe.macros.carbs;
-            acc.fat += entry.recipe.macros.fat;
+            const macros = entry.recipe.macros || { calories: 0, protein: 0, carbs: 0, fat: 0 };
+            acc.calories += (macros.calories || 0);
+            acc.protein += (macros.protein || 0);
+            acc.carbs += (macros.carbs || 0);
+            acc.fat += (macros.fat || 0);
             return acc;
         }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
     }, [loggedEntries]);
@@ -84,19 +83,22 @@ const LogView: React.FC<LogViewProps> = ({ eatenLog, mealPlan }) => {
                             </tr>
                         </thead>
                         <tbody>
-                            {loggedEntries.map((entry, index) => (
-                                <tr key={index} className="bg-white border-b hover:bg-gray-50">
-                                    <th scope="row" className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">
-                                        {new Date(entry.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
-                                    </th>
-                                    <td className="px-6 py-4 capitalize">{entry.mealType}</td>
-                                    <td className="px-6 py-4 font-semibold">{entry.recipe.name}</td>
-                                    <td className="px-6 py-4 text-right">{entry.recipe.macros.calories.toFixed(0)}</td>
-                                    <td className="px-6 py-4 text-right">{entry.recipe.macros.protein.toFixed(0)}</td>
-                                    <td className="px-6 py-4 text-right">{entry.recipe.macros.carbs.toFixed(0)}</td>
-                                    <td className="px-6 py-4 text-right">{entry.recipe.macros.fat.toFixed(0)}</td>
-                                </tr>
-                            ))}
+                            {loggedEntries.map((entry, index) => {
+                                const macros = entry.recipe.macros || { calories: 0, protein: 0, carbs: 0, fat: 0 };
+                                return (
+                                    <tr key={index} className="bg-white border-b hover:bg-gray-50">
+                                        <th scope="row" className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">
+                                            {new Date(entry.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                                        </th>
+                                        <td className="px-6 py-4 capitalize">{entry.mealType}</td>
+                                        <td className="px-6 py-4 font-semibold">{entry.recipe.name}</td>
+                                        <td className="px-6 py-4 text-right">{(macros.calories || 0).toFixed(0)}</td>
+                                        <td className="px-6 py-4 text-right">{(macros.protein || 0).toFixed(0)}</td>
+                                        <td className="px-6 py-4 text-right">{(macros.carbs || 0).toFixed(0)}</td>
+                                        <td className="px-6 py-4 text-right">{(macros.fat || 0).toFixed(0)}</td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                  </div>

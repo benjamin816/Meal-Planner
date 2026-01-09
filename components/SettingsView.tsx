@@ -1,137 +1,31 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Settings, RecipeTag, Person, NutritionGoals, RecipeCategory } from '../types';
-import { SettingsIcon, MagicWandIcon, XIcon, PlusIcon } from './Icons';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Settings, Person, NutritionGoals, RecipeCategory, DayOfWeek, DaySettings, RecipeTag, Recipe } from '../types';
+import { SettingsIcon, MagicWandIcon, XIcon, CheckIcon, LoadingIcon, HeartIcon } from './Icons';
 import AutoSuggestGoalsModal from './AutoSuggestGoalsModal';
+import { reconcileRecipesWithBlacklist, ReconciliationResult } from '../services/geminiService';
 
 interface SettingsViewProps {
     settings: Settings;
     onSettingsChange: (newSettings: Settings) => void;
     allTags: Record<RecipeCategory, RecipeTag[]>;
     onAllTagsChange: (newAllTags: Record<RecipeCategory, RecipeTag[]>) => void;
+    recipes: Recipe[];
+    onBulkUpdateRecipes: (updatedRecipes: Recipe[]) => void;
 }
 
-// New component for interactive tag selection and creation
-const InteractiveTagEditor: React.FC<{
-    title: string;
-    category: RecipeCategory;
-    allCategoryTags: RecipeTag[];
-    selectedTags: RecipeTag[];
-    onTagSelect: (tag: RecipeTag) => void;
-    onTagRemove: (tag: RecipeTag) => void;
-    onMasterTagCreate: (category: RecipeCategory, tag: RecipeTag) => void;
-}> = ({ title, category, allCategoryTags, selectedTags, onTagSelect, onTagRemove, onMasterTagCreate }) => {
-    const [isAdding, setIsAdding] = useState(false);
-    const [newTagInput, setNewTagInput] = useState('');
-    const popoverRef = useRef<HTMLDivElement>(null);
+const DAYS: DayOfWeek[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-    const unselectedTags = allCategoryTags.filter(t => !selectedTags.includes(t)).sort();
-
-    const handleAddNewTag = () => {
-        const tagToAdd = newTagInput.trim().toLowerCase();
-        if (tagToAdd && !allCategoryTags.includes(tagToAdd)) {
-            onMasterTagCreate(category, tagToAdd);
-            onTagSelect(tagToAdd);
-            setNewTagInput('');
-            setIsAdding(false);
-        } else if (tagToAdd && allCategoryTags.includes(tagToAdd) && !selectedTags.includes(tagToAdd)) {
-            onTagSelect(tagToAdd);
-            setNewTagInput('');
-            setIsAdding(false);
-        }
-    };
-    
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
-                setIsAdding(false);
-            }
-        };
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, [popoverRef]);
-
-    return (
-        <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">{title}</label>
-            <div className="flex flex-wrap gap-2 p-3 bg-white rounded-md border items-center min-h-[48px]">
-                {selectedTags.map(tag => (
-                    <span key={tag} className="bg-blue-100 text-blue-800 text-sm font-medium pl-3 pr-1.5 py-1 rounded-full flex items-center">
-                        {tag}
-                        <button onClick={() => onTagRemove(tag)} className="ml-1.5 text-blue-500 hover:bg-blue-200 rounded-full w-4 h-4 flex items-center justify-center transition-colors">
-                            <XIcon className="h-3 w-3" />
-                        </button>
-                    </span>
-                ))}
-                
-                <div className="relative" ref={popoverRef}>
-                    <button 
-                        type="button" 
-                        onClick={() => setIsAdding(!isAdding)} 
-                        className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-1 px-3 rounded-md text-sm"
-                    >
-                        + Add tag
-                    </button>
-                    {isAdding && (
-                        <div className="absolute top-full left-0 mt-2 w-56 bg-white border rounded-lg shadow-xl z-10 p-2">
-                             <div className="flex items-center mb-2">
-                                <input 
-                                    type="text" 
-                                    placeholder="Add new tag..." 
-                                    value={newTagInput}
-                                    onChange={(e) => setNewTagInput(e.target.value)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                            e.preventDefault();
-                                            handleAddNewTag();
-                                        }
-                                    }}
-                                    className="flex-grow border-gray-300 rounded-l-md shadow-sm text-sm focus:ring-blue-500 focus:border-blue-500"
-                                />
-                                <button type="button" onClick={handleAddNewTag} className="bg-blue-600 text-white p-2 rounded-r-md hover:bg-blue-700"><PlusIcon className="h-4 w-4"/></button>
-                             </div>
-                             {unselectedTags.length > 0 && (
-                                <>
-                                 <hr className="my-1"/>
-                                 <div className="max-h-32 overflow-y-auto">
-                                    {unselectedTags.map(tag => (
-                                        <button 
-                                            key={tag}
-                                            type="button"
-                                            onClick={() => {
-                                                onTagSelect(tag);
-                                                setIsAdding(false);
-                                            }}
-                                            className="block w-full text-left px-2 py-1 text-sm text-gray-700 hover:bg-gray-100 rounded-md"
-                                        >
-                                            {tag}
-                                        </button>
-                                    ))}
-                                 </div>
-                                </>
-                             )}
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
-};
-
-
-const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSettingsChange, allTags, onAllTagsChange }) => {
+const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSettingsChange, allTags, onAllTagsChange, recipes, onBulkUpdateRecipes }) => {
     const [localSettings, setLocalSettings] = useState<Settings>(settings);
-    const [localAllTags, setLocalAllTags] = useState<Record<RecipeCategory, RecipeTag[]>>(allTags);
     const [isAutoSuggestModalOpen, setIsAutoSuggestModalOpen] = useState(false);
     const [editingPersonIndex, setEditingPersonIndex] = useState<number | null>(null);
     const [newBlacklistedIngredient, setNewBlacklistedIngredient] = useState('');
+    const [isReconciling, setIsReconciling] = useState(false);
+    const [reconciliationReport, setReconciliationReport] = useState<ReconciliationResult[] | null>(null);
 
     useEffect(() => {
         setLocalSettings(settings);
     }, [settings]);
-
-    useEffect(() => {
-        setLocalAllTags(allTags);
-    }, [allTags]);
 
     const handleSave = () => {
         const finalPeople: Person[] = [];
@@ -139,26 +33,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSettingsChange,
             finalPeople.push(localSettings.people[i] || { name: `Person ${i + 1}`, goals: { calories: 2000, protein: 30, carbs: 40, fat: 30 } });
         }
         onSettingsChange({ ...localSettings, people: finalPeople });
-        onAllTagsChange(localAllTags);
         alert('Settings saved!');
-    };
-    
-    const handleGenerationTagChange = (action: 'add' | 'remove', tag: RecipeTag, group: keyof Settings['generationTags']) => {
-        setLocalSettings(prev => {
-            const currentTags = prev.generationTags[group];
-            if (action === 'add' && currentTags.includes(tag)) return prev; // Do nothing if tag already exists
-            
-            const newTags = action === 'add' 
-                ? [...currentTags, tag] 
-                : currentTags.filter(t => t !== tag);
-            return { ...prev, generationTags: { ...prev.generationTags, [group]: newTags }};
-        });
-    };
-
-    const handleMasterTagCreate = (category: RecipeCategory, tagToAdd: RecipeTag) => {
-        if (tagToAdd && !localAllTags[category].includes(tagToAdd)) {
-            setLocalAllTags(prev => ({ ...prev, [category]: [...prev[category], tagToAdd].sort() }));
-        }
     };
 
     const handlePersonChange = (index: number, field: keyof Person, value: string) => {
@@ -189,14 +64,49 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSettingsChange,
         setEditingPersonIndex(null);
     };
 
-    const handleAddBlacklistedIngredient = () => {
+    const handleAddBlacklistedIngredient = async () => {
         const ingredientToAdd = newBlacklistedIngredient.trim().toLowerCase();
         if (ingredientToAdd && !localSettings.blacklistedIngredients.includes(ingredientToAdd)) {
-            setLocalSettings(prev => ({
-                ...prev,
-                blacklistedIngredients: [...prev.blacklistedIngredients, ingredientToAdd].sort()
-            }));
-            setNewBlacklistedIngredient('');
+            setIsReconciling(true);
+            try {
+                // First, check for impacts
+                const results = await reconcileRecipesWithBlacklist(recipes, ingredientToAdd);
+                
+                if (results.length > 0) {
+                    setReconciliationReport(results);
+                    // Update the actual recipe library
+                    const updatedRecipeList = recipes.map(r => {
+                        const reconciliation = results.find(res => res.originalId === r.id);
+                        if (reconciliation) {
+                            return {
+                                ...r,
+                                ...reconciliation.updatedRecipe,
+                                id: r.id // Keep original ID
+                            } as Recipe;
+                        }
+                        return r;
+                    });
+                    onBulkUpdateRecipes(updatedRecipeList);
+                } else {
+                    alert(`Ingredient "${ingredientToAdd}" added. No recipes currently in your library use this ingredient.`);
+                }
+
+                // Update settings
+                setLocalSettings(prev => ({
+                    ...prev,
+                    blacklistedIngredients: [...prev.blacklistedIngredients, ingredientToAdd].sort()
+                }));
+                setNewBlacklistedIngredient('');
+            } catch (error) {
+                console.error("Reconciliation failed:", error);
+                alert("Failed to reconcile recipes with the new blacklist. Ingredient added but recipes were not updated.");
+                 setLocalSettings(prev => ({
+                    ...prev,
+                    blacklistedIngredients: [...prev.blacklistedIngredients, ingredientToAdd].sort()
+                }));
+            } finally {
+                setIsReconciling(false);
+            }
         }
     };
 
@@ -207,102 +117,237 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSettingsChange,
         }));
     };
 
-    const generationTagGroups: {
-      title: string;
-      category: RecipeCategory;
-      groupKey: keyof Settings['generationTags'];
-    }[] = [
-      { title: "Weekday Dinner Tags", category: RecipeCategory.Dinner, groupKey: 'weekdayDinner'},
-      { title: "Weekend Dinner Tags", category: RecipeCategory.Dinner, groupKey: 'weekendDinner'},
-      { title: "Weekday Breakfast Tags", category: RecipeCategory.Breakfast, groupKey: 'weekdayBreakfast'},
-      { title: "Weekend Breakfast Tags", category: RecipeCategory.Breakfast, groupKey: 'weekendBreakfast'},
-      { title: "Weekday Snack Tags", category: RecipeCategory.Snack, groupKey: 'weekdaySnack'},
-      { title: "Weekend Snack Tags", category: RecipeCategory.Snack, groupKey: 'weekendSnack'},
-    ];
+    const toggleDailyMeal = (day: DayOfWeek, meal: keyof DaySettings) => {
+        setLocalSettings(prev => ({
+            ...prev,
+            dailyMeals: {
+                ...prev.dailyMeals,
+                [day]: {
+                    ...prev.dailyMeals[day],
+                    [meal]: !prev.dailyMeals[day][meal]
+                }
+            }
+        }));
+    };
+
+    const minAllowedMaxUses = useMemo(() => {
+        const totalSlotsPerWeek = 7;
+        const uniqueDinners = localSettings.dinnersPerWeek;
+        const minDinnersPerRecipe = Math.ceil(totalSlotsPerWeek / uniqueDinners);
+        return minDinnersPerRecipe * (localSettings.useLeftoverForLunch ? 2 : 1);
+    }, [localSettings.dinnersPerWeek, localSettings.useLeftoverForLunch]);
+
+    useEffect(() => {
+        if (localSettings.maxUsesPerRecipePerPlan < minAllowedMaxUses) {
+            setLocalSettings(prev => ({ ...prev, maxUsesPerRecipePerPlan: minAllowedMaxUses }));
+        }
+    }, [minAllowedMaxUses]);
 
     return (
-        <div>
+        <div className="max-w-4xl mx-auto">
             <div className="flex items-center mb-6">
-                <SettingsIcon />
+                <SettingsIcon className="text-blue-600 w-8 h-8" />
                 <h2 className="text-2xl font-bold text-gray-700 ml-3">Settings</h2>
             </div>
 
             <div className="space-y-8">
                 {/* Plan Generation Settings */}
-                <div className="p-6 bg-gray-50 rounded-lg border">
-                    <h3 className="text-xl font-semibold text-gray-800 mb-4">Plan Generation</h3>
+                <div className="p-6 bg-gray-50 rounded-xl border border-gray-200 shadow-sm">
+                    <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center">
+                        <span className="bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2">1</span>
+                        Plan Generation
+                    </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Plan Duration (Weeks)</label>
-                            <select value={localSettings.planDurationWeeks} onChange={e => setLocalSettings({...localSettings, planDurationWeeks: parseInt(e.target.value)})} className="w-full border-gray-300 rounded-md shadow-sm">
+                            <label className="block text-sm font-bold text-gray-700 mb-2">Default planned duration (Weeks)</label>
+                            <select value={localSettings.planDurationWeeks} onChange={e => setLocalSettings({...localSettings, planDurationWeeks: parseInt(e.target.value)})} className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500">
                                 {[1, 2, 3, 4].map(w => <option key={w} value={w}>{w} Week{w > 1 ? 's' : ''}</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Number of People</label>
-                            <select value={localSettings.numberOfPeople} onChange={e => setLocalSettings({...localSettings, numberOfPeople: parseInt(e.target.value)})} className="w-full border-gray-300 rounded-md shadow-sm">
-                                {[1, 2, 3, 4].map(p => <option key={p} value={p}>{p} Person{p > 1 ? 's' : ''}</option>)}
+                            <label className="block text-sm font-bold text-gray-700 mb-2">Number of People</label>
+                            <select value={localSettings.numberOfPeople} onChange={e => setLocalSettings({...localSettings, numberOfPeople: parseInt(e.target.value)})} className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500">
+                                {[1, 2, 3, 4, 5, 6].map(p => <option key={p} value={p}>{p} Person{p > 1 ? 's' : ''}</option>)}
                             </select>
                         </div>
                     </div>
-                     <div className="mt-6 p-4 bg-white rounded-md border border-blue-200">
-                        <h4 className="text-md font-semibold text-gray-800 mb-2">Dinner & Leftover Settings</h4>
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Servings Per Person (Dinners)</label>
-                                <select value={localSettings.servingsPerPerson} onChange={e => setLocalSettings(s => ({...s, servingsPerPerson: parseInt(e.target.value)}))} className="w-full border-gray-300 rounded-md shadow-sm">
-                                    <option value={1}>1 (No Leftovers)</option>
-                                    <option value={2}>2 (Dinner + 1 Leftover)</option>
-                                    <option value={3}>3 (Dinner + 2 Leftovers)</option>
-                                    <option value={4}>4 (Dinner + 3 Leftovers)</option>
-                                </select>
-                            </div>
-                            {localSettings.servingsPerPerson > 1 && (
+
+                     <div className="mt-8 p-6 bg-white rounded-xl border border-blue-100 shadow-sm">
+                        <h4 className="text-lg font-bold text-blue-800 mb-4 flex items-center">Meal Logic</h4>
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                             <div className="space-y-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Leftover Placement</label>
-                                    <select value={localSettings.leftoverStrategy} onChange={e => setLocalSettings(s => ({...s, leftoverStrategy: e.target.value as any}))} className="w-full border-gray-300 rounded-md shadow-sm">
-                                        <option value="next_day">Next Day's Lunch</option>
-                                        <option value="day_after">Lunch 2 Days Later</option>
-                                        <option value="random">Random Lunch This Week</option>
-                                    </select>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1">Unique dinner recipes per week</label>
+                                    <input 
+                                        type="number" 
+                                        min="1" max="7" 
+                                        value={localSettings.dinnersPerWeek} 
+                                        onChange={e => setLocalSettings({...localSettings, dinnersPerWeek: parseInt(e.target.value) || 1})}
+                                        className="w-full border-gray-300 rounded-lg"
+                                    />
                                 </div>
-                            )}
-                        </div>
-                         <p className="text-xs text-gray-500 mt-2">These settings only apply to <strong className="text-gray-700">Dinners</strong> to automatically create lunches. Breakfasts and snacks are always single-serving.</p>
-                    </div>
-                     <h4 className="text-lg font-semibold text-gray-800 mt-6 mb-4">Meals Per Week</h4>
-                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                        <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">Weekday Dinners</label>
-                            <input type="number" min="0" max="5" value={localSettings.mealsPerWeek.weekdayDinners} onChange={e => setLocalSettings(s => ({...s, mealsPerWeek: {...s.mealsPerWeek, weekdayDinners: parseInt(e.target.value)}}))} className="w-full border-gray-300 rounded-md shadow-sm" />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">Weekend Dinners</label>
-                            <input type="number" min="0" max="2" value={localSettings.mealsPerWeek.weekendDinners} onChange={e => setLocalSettings(s => ({...s, mealsPerWeek: {...s.mealsPerWeek, weekendDinners: parseInt(e.target.value)}}))} className="w-full border-gray-300 rounded-md shadow-sm" />
-                        </div>
-                         <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">Weekday Breakfasts</label>
-                            <input type="number" min="0" max="5" value={localSettings.mealsPerWeek.weekdayBreakfasts} onChange={e => setLocalSettings(s => ({...s, mealsPerWeek: {...s.mealsPerWeek, weekdayBreakfasts: parseInt(e.target.value)}}))} className="w-full border-gray-300 rounded-md shadow-sm" />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">Weekend Breakfasts</label>
-                            <input type="number" min="0" max="2" value={localSettings.mealsPerWeek.weekendBreakfasts} onChange={e => setLocalSettings(s => ({...s, mealsPerWeek: {...s.mealsPerWeek, weekendBreakfasts: parseInt(e.target.value)}}))} className="w-full border-gray-300 rounded-md shadow-sm" />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">Weekday Snacks</label>
-                            <input type="number" min="0" max="5" value={localSettings.mealsPerWeek.weekdaySnacks} onChange={e => setLocalSettings(s => ({...s, mealsPerWeek: {...s.mealsPerWeek, weekdaySnacks: parseInt(e.target.value)}}))} className="w-full border-gray-300 rounded-md shadow-sm" />
-                        </div>
-                         <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">Weekend Snacks</label>
-                            <input type="number" min="0" max="2" value={localSettings.mealsPerWeek.weekendSnacks} onChange={e => setLocalSettings(s => ({...s, mealsPerWeek: {...s.mealsPerWeek, weekendSnacks: parseInt(e.target.value)}}))} className="w-full border-gray-300 rounded-md shadow-sm" />
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1">Unique breakfast recipes per week</label>
+                                    <input 
+                                        type="number" 
+                                        min="1" max="7" 
+                                        value={localSettings.breakfastsPerWeek} 
+                                        onChange={e => setLocalSettings({...localSettings, breakfastsPerWeek: parseInt(e.target.value) || 1})}
+                                        className="w-full border-gray-300 rounded-lg"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1">Unique snack recipes per week</label>
+                                    <input 
+                                        type="number" 
+                                        min="1" max="7" 
+                                        value={localSettings.snacksPerWeek} 
+                                        onChange={e => setLocalSettings({...localSettings, snacksPerWeek: parseInt(e.target.value) || 1})}
+                                        className="w-full border-gray-300 rounded-lg"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-normal text-gray-700 mb-1">Default Drinks per Person (Daily)</label>
+                                    <div className="flex items-center gap-3">
+                                        <input 
+                                            type="number" 
+                                            min="0" max="10" 
+                                            value={localSettings.defaultDrinksPerPersonPerDay} 
+                                            onChange={e => setLocalSettings({...localSettings, defaultDrinksPerPersonPerDay: parseInt(e.target.value) || 0})}
+                                            className="w-full border-gray-300 rounded-lg"
+                                        />
+                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Units</span>
+                                    </div>
+                                </div>
+                                <div className="pt-2 border-t border-gray-100">
+                                    <label className="block text-sm font-normal text-gray-700 mb-1">Max uses per recipe (7 day period/person)</label>
+                                    <div className="flex items-center gap-3">
+                                        <input 
+                                            type="number" 
+                                            min={minAllowedMaxUses}
+                                            value={localSettings.maxUsesPerRecipePerPlan} 
+                                            onChange={e => setLocalSettings({...localSettings, maxUsesPerRecipePerPlan: Math.max(minAllowedMaxUses, parseInt(e.target.value) || minAllowedMaxUses)})}
+                                            className="w-full border-gray-300 rounded-lg font-bold"
+                                        />
+                                        <div className="text-[10px] font-black text-gray-400 uppercase tracking-tight leading-none min-w-[100px]">
+                                            Min required: <span className="text-blue-600">{minAllowedMaxUses}</span>
+                                        </div>
+                                    </div>
+                                    <p className="text-[10px] text-gray-400 mt-1 italic">Limits total appearances for ANY recipe per person per 7 days.</p>
+                                </div>
+                            </div>
+                            <div className="bg-blue-50 p-6 rounded-lg flex flex-col justify-center space-y-4">
+                                <label className="flex items-center p-3 bg-white rounded-xl border border-blue-200 cursor-pointer hover:bg-blue-50 transition-colors">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={localSettings.useLeftoverForLunch} 
+                                        onChange={e => setLocalSettings({...localSettings, useLeftoverForLunch: e.target.checked})} 
+                                        className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                    />
+                                    <div className="ml-3">
+                                        <p className="text-sm font-semibold text-gray-800">Use Dinners to create Lunches</p>
+                                        <p className="text-[10px] text-gray-500 uppercase font-black tracking-tight">Efficiency Booster</p>
+                                    </div>
+                                </label>
+                                
+                                <label className="flex items-center p-3 bg-white rounded-xl border border-blue-200 cursor-pointer hover:bg-blue-50 transition-colors">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={localSettings.autoAdjustPortions} 
+                                        onChange={e => setLocalSettings({...localSettings, autoAdjustPortions: e.target.checked})} 
+                                        className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                    />
+                                    <div className="ml-3">
+                                        <p className="text-sm font-semibold text-gray-800">Auto-Adjust Serving Portions</p>
+                                        <p className="text-[10px] text-gray-500 uppercase font-black tracking-tight">Matches individual calorie goals</p>
+                                    </div>
+                                </label>
+
+                                <div className="flex flex-col space-y-2 p-3 bg-white rounded-xl border border-blue-200">
+                                    <label className="flex items-center cursor-pointer">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={localSettings.fudgeRoom > 0} 
+                                            onChange={e => {
+                                                setLocalSettings({
+                                                    ...localSettings, 
+                                                    fudgeRoom: e.target.checked ? (localSettings.fudgeRoom || 250) : 0
+                                                });
+                                            }} 
+                                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                        />
+                                        <div className="ml-3">
+                                            <p className="text-sm font-semibold text-gray-800">Fudge room for dessert/treats</p>
+                                        </div>
+                                    </label>
+                                    {localSettings.fudgeRoom > 0 && (
+                                        <div className="ml-7 flex items-center gap-2 animate-fade-in">
+                                            <input 
+                                                type="number"
+                                                value={localSettings.fudgeRoom}
+                                                onChange={e => setLocalSettings({...localSettings, fudgeRoom: Math.max(0, parseInt(e.target.value) || 0)})}
+                                                className="w-24 border-gray-300 rounded-lg text-sm font-bold focus:ring-blue-500 focus:border-blue-500"
+                                                min="0"
+                                            />
+                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">calories</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
+                {/* Daily Meals Configuration */}
+                <div className="p-6 bg-gray-50 rounded-xl border border-gray-200 shadow-sm">
+                    <h3 className="text-xl font-bold text-gray-800 mb-2 flex items-center">
+                        <span className="bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2">2</span>
+                        Meals To Plan (Daily)
+                    </h3>
+                    <p className="text-sm text-gray-600 mb-6 italic">Toggle which meals the planner should schedule for your group daily.</p>
+                    
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-center">
+                            <thead>
+                                <tr className="text-gray-500 uppercase text-[10px] font-bold tracking-widest">
+                                    <th className="text-left pb-4">Day</th>
+                                    <th className="pb-4">Breakfast</th>
+                                    <th className="pb-4">Lunch</th>
+                                    <th className="pb-4">Dinner</th>
+                                    <th className="pb-4">Snack</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                                {DAYS.map((day) => (
+                                    <tr key={day} className="group hover:bg-white transition-colors">
+                                        <td className="text-left py-4 font-bold text-gray-700">{day}</td>
+                                        {(['breakfast', 'lunch', 'dinner', 'snack'] as const).map(meal => (
+                                            <td key={meal} className="py-4">
+                                                <button
+                                                    onClick={() => toggleDailyMeal(day, meal)}
+                                                    className={`w-10 h-10 rounded-xl border-2 flex items-center justify-center mx-auto transition-all ${
+                                                        localSettings.dailyMeals[day][meal]
+                                                        ? 'bg-blue-600 border-blue-600 text-white shadow-md scale-105'
+                                                        : 'bg-white border-gray-200 text-transparent hover:border-gray-300'
+                                                    }`}
+                                                >
+                                                    <CheckIcon className="w-6 h-6" />
+                                                </button>
+                                            </td>
+                                        ))}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
                 {/* Avoided Ingredients */}
-                <div className="p-6 bg-gray-50 rounded-lg border">
-                    <h3 className="text-xl font-semibold text-gray-800 mb-4">Avoided Ingredients</h3>
-                    <p className="text-sm text-gray-600 mb-4">Add ingredients here to prevent the AI from using them in generated, imported, or edited recipes. Useful for allergies or preferences.</p>
+                <div className="p-6 bg-gray-50 rounded-xl border border-gray-200 shadow-sm">
+                    <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                        <span className="bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2">3</span>
+                        Avoided Ingredients
+                    </h3>
                      <div className="flex items-center mb-4">
                         <input 
                             type="text" 
@@ -315,79 +360,76 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSettingsChange,
                                     handleAddBlacklistedIngredient();
                                 }
                             }}
-                            className="flex-grow border-gray-300 rounded-l-md shadow-sm text-sm focus:ring-blue-500 focus:border-blue-500"
+                            disabled={isReconciling}
+                            className="flex-grow border-gray-300 rounded-l-xl shadow-sm focus:ring-blue-500 disabled:bg-gray-100"
                         />
-                        <button type="button" onClick={handleAddBlacklistedIngredient} className="bg-blue-600 text-white p-2 rounded-r-md hover:bg-blue-700 font-semibold text-sm">Add</button>
+                        <button 
+                            type="button" 
+                            onClick={handleAddBlacklistedIngredient} 
+                            disabled={isReconciling || !newBlacklistedIngredient.trim()}
+                            className="bg-blue-600 text-white px-6 py-2 rounded-r-xl hover:bg-blue-700 font-bold disabled:bg-blue-300 flex items-center gap-2"
+                        >
+                            {isReconciling ? <LoadingIcon className="w-4 h-4" /> : null}
+                            {isReconciling ? 'Checking...' : 'Add'}
+                        </button>
                     </div>
-                    <div className="flex flex-wrap gap-2 p-3 bg-white rounded-md border items-center min-h-[48px]">
+                    {isReconciling && (
+                        <p className="text-xs font-bold text-blue-600 animate-pulse mb-4 flex items-center gap-2">
+                             AI is scanning your library to remove/substitute this ingredient...
+                        </p>
+                    )}
+                    <div className="flex flex-wrap gap-2 p-4 bg-white rounded-xl border items-center min-h-[56px]">
                         {localSettings.blacklistedIngredients.length === 0 && <span className="text-sm text-gray-400">No ingredients blacklisted yet.</span>}
                         {localSettings.blacklistedIngredients.map(ing => (
-                            <span key={ing} className="bg-red-100 text-red-800 text-sm font-medium pl-3 pr-1.5 py-1 rounded-full flex items-center">
+                            <span key={ing} className="bg-red-50 text-red-700 text-sm font-bold pl-4 pr-2 py-2 rounded-full flex items-center border border-red-100">
                                 {ing}
-                                <button onClick={() => handleRemoveBlacklistedIngredient(ing)} className="ml-1.5 text-red-500 hover:bg-red-200 rounded-full w-4 h-4 flex items-center justify-center transition-colors">
-                                    <XIcon className="h-3 w-3" />
+                                <button onClick={() => handleRemoveBlacklistedIngredient(ing)} className="ml-2 text-red-400 hover:text-red-600 transition-colors">
+                                    <XIcon className="h-4 w-4" />
                                 </button>
                             </span>
                         ))}
                     </div>
                 </div>
-
-                {/* Generation Tags */}
-                <div className="p-6 bg-gray-50 rounded-lg border">
-                    <h3 className="text-xl font-semibold text-gray-800 mb-4">Meal Generation Tags</h3>
-                    <p className="text-sm text-gray-600 mb-4">Select which tags the planner should use to categorize recipes. You can add new tags directly from here.</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                        {generationTagGroups.map(({ title, category, groupKey }) => (
-                            <InteractiveTagEditor
-                                key={groupKey}
-                                title={title}
-                                category={category}
-                                allCategoryTags={localAllTags[category]}
-                                selectedTags={localSettings.generationTags[groupKey]}
-                                onTagSelect={(tag) => handleGenerationTagChange('add', tag, groupKey)}
-                                onTagRemove={(tag) => handleGenerationTagChange('remove', tag, groupKey)}
-                                onMasterTagCreate={handleMasterTagCreate}
-                            />
-                        ))}
-                    </div>
-                </div>
                 
                 {/* People & Nutrition Goals */}
-                <div className="p-6 bg-gray-50 rounded-lg border">
-                    <h3 className="text-xl font-semibold text-gray-800 mb-4">People & Nutrition Goals</h3>
+                <div className="p-6 bg-gray-50 rounded-xl border border-gray-200 shadow-sm">
+                    <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center">
+                         <span className="bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2">4</span>
+                        People & Nutrition Goals
+                    </h3>
                     <div className="space-y-6">
                         {Array.from({ length: localSettings.numberOfPeople }).map((_, index) => {
                             const person = localSettings.people[index] || { name: `Person ${index + 1}`, goals: { calories: 2000, protein: 30, carbs: 40, fat: 30 } };
                             return (
-                                <div key={index} className="p-4 bg-white rounded-lg border">
-                                    <div className="flex justify-between items-center mb-4">
+                                <div key={index} className="p-6 bg-white rounded-xl border border-gray-100 shadow-sm">
+                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                                         <input 
                                             type="text" 
                                             value={person.name} 
                                             onChange={e => handlePersonChange(index, 'name', e.target.value)} 
-                                            className="font-semibold text-lg border-b-2 border-transparent focus:border-blue-500 focus:outline-none" 
+                                            className="font-bold text-xl border-b-2 border-transparent focus:border-blue-500 focus:outline-none bg-transparent" 
                                         />
-                                        <button onClick={() => { setEditingPersonIndex(index); setIsAutoSuggestModalOpen(true); }} className="text-sm text-purple-600 hover:text-purple-800 font-semibold flex items-center">
-                                            <MagicWandIcon />
-                                            <span className="ml-1">Auto-Suggest</span>
+                                        <button onClick={() => { setEditingPersonIndex(index); setIsAutoSuggestModalOpen(true); }} className="text-sm text-purple-600 hover:bg-purple-50 px-4 py-2 rounded-lg font-bold flex items-center border border-purple-200 transition-colors">
+                                            <MagicWandIcon className="w-4 h-4 mr-2" />
+                                            Auto-Suggest
                                         </button>
                                     </div>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                                         <div>
-                                            <label className="block text-xs font-medium text-gray-500 mb-1">Calories</label>
-                                            <input type="number" value={person.goals.calories} onChange={e => handleGoalsChange(index, 'calories', parseInt(e.target.value))} className="w-full border-gray-300 rounded-md shadow-sm" />
+                                            <label className="block text-[10px] uppercase font-black text-gray-400 mb-1">Calories</label>
+                                            <input type="number" value={person.goals.calories} onChange={e => handleGoalsChange(index, 'calories', parseInt(e.target.value))} className="w-full border-gray-200 rounded-lg font-bold text-gray-700" />
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-medium text-gray-500 mb-1">Protein %</label>
-                                            <input type="number" value={person.goals.protein} onChange={e => handleGoalsChange(index, 'protein', parseInt(e.target.value))} className="w-full border-gray-300 rounded-md shadow-sm" />
+                                            <label className="block text-[10px] uppercase font-black text-gray-400 mb-1">Protein %</label>
+                                            <input type="number" value={person.goals.protein} onChange={e => handleGoalsChange(index, 'protein', parseInt(e.target.value))} className="w-full border-gray-200 rounded-lg font-bold text-gray-700" />
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-medium text-gray-500 mb-1">Carbs %</label>
-                                            <input type="number" value={person.goals.carbs} onChange={e => handleGoalsChange(index, 'carbs', parseInt(e.target.value))} className="w-full border-gray-300 rounded-md shadow-sm" />
+                                            <label className="block text-[10px] uppercase font-black text-gray-400 mb-1">Carbs %</label>
+                                            <input type="number" value={person.goals.carbs} onChange={e => handleGoalsChange(index, 'carbs', parseInt(e.target.value))} className="w-full border-gray-200 rounded-lg font-bold text-gray-700" />
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-medium text-gray-500 mb-1">Fat %</label>
-                                            <input type="number" value={person.goals.fat} onChange={e => handleGoalsChange(index, 'fat', parseInt(e.target.value))} className="w-full border-gray-300 rounded-md shadow-sm" />
+                                            <label className="block text-[10px] uppercase font-black text-gray-400 mb-1">Fat %</label>
+                                            <input type="number" value={person.goals.fat} onChange={e => handleGoalsChange(index, 'fat', parseInt(e.target.value))} className="w-full border-gray-200 rounded-lg font-bold text-gray-700" />
                                         </div>
                                     </div>
                                 </div>
@@ -396,9 +438,9 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSettingsChange,
                     </div>
                 </div>
                 
-                <div className="flex justify-end mt-8">
-                    <button onClick={handleSave} className="px-6 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 transition-colors font-semibold">
-                        Save Settings
+                <div className="flex justify-end pt-4">
+                    <button onClick={handleSave} className="px-10 py-4 bg-blue-600 text-white rounded-xl shadow-lg hover:bg-blue-700 hover:shadow-xl transition-all font-bold text-lg">
+                        Save All Settings
                     </button>
                 </div>
             </div>
@@ -408,6 +450,63 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSettingsChange,
                     onClose={() => setIsAutoSuggestModalOpen(false)}
                     onGoalsSuggested={handleSuggestedGoals}
                 />
+            )}
+
+            {/* Reconciliation Report Modal */}
+            {reconciliationReport && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-[130] p-4">
+                    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-2xl overflow-hidden animate-fade-in flex flex-col max-h-[85vh]">
+                        <div className="p-8 border-b border-gray-100 bg-blue-50/50 flex justify-between items-center shrink-0">
+                            <div>
+                                <h2 className="text-3xl font-black text-gray-900 tracking-tight">AI Reconciliation Report</h2>
+                                <p className="text-xs font-bold text-blue-600 uppercase tracking-[0.2em] mt-1">Automatic substitution & Macro adjustment</p>
+                            </div>
+                            <button onClick={() => setReconciliationReport(null)} className="p-2 bg-white rounded-full shadow-sm hover:bg-gray-100 transition-all"><XIcon className="w-6 h-6 text-gray-400"/></button>
+                        </div>
+                        <div className="p-8 overflow-y-auto flex-grow space-y-6">
+                            <p className="text-sm text-gray-600 font-medium bg-gray-50 p-4 rounded-2xl border border-gray-200">
+                                Your recipe library has been automatically updated to remove the blacklisted ingredient. Here is a summary of the changes made by the AI:
+                            </p>
+                            {reconciliationReport.map((item, idx) => {
+                                const original = recipes.find(r => r.id === item.originalId);
+                                return (
+                                    <div key={idx} className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm space-y-3">
+                                        <div className="flex justify-between items-center">
+                                            <h4 className="font-black text-lg text-gray-800">{original?.name}</h4>
+                                            <span className="text-[10px] font-black uppercase text-green-600 bg-green-50 px-2 py-1 rounded-md">Updated</span>
+                                        </div>
+                                        <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
+                                            <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Changes Made</p>
+                                            <p className="text-sm text-gray-700 font-medium">{item.changesSummary}</p>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-1">
+                                                <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Macro Update</p>
+                                                <div className="flex gap-2 text-[10px] font-bold text-gray-600">
+                                                    <span>{original?.macros?.calories || 0} → {item.updatedRecipe?.macros?.calories || 0} kcal</span>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Health Score</p>
+                                                <div className="flex gap-2 text-[10px] font-bold text-gray-600">
+                                                    <span>{original?.healthScore || 0} → {item.updatedRecipe?.healthScore || 0} / 10</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        <div className="p-8 bg-gray-50 border-t border-gray-100 flex justify-center">
+                            <button 
+                                onClick={() => setReconciliationReport(null)}
+                                className="px-10 py-4 bg-gray-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-black shadow-lg active:scale-95 transition-all"
+                            >
+                                Acknowledge & Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

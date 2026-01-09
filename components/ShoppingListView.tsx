@@ -1,5 +1,4 @@
 
-
 import React, { useState } from 'react';
 import { ShoppingListCategory, ShoppingListItem, Settings } from '../types';
 import { ShoppingCartIcon, CheckIcon, PlusIcon, TrashIcon, MagicWandIcon, XIcon, CopyIcon, LoadingIcon } from './Icons';
@@ -20,6 +19,9 @@ const ShoppingListView: React.FC<ShoppingListViewProps> = ({ shoppingList, setSh
     const [agentStore, setAgentStore] = useState('Walmart');
     const [agentService, setAgentService] = useState('Pickup');
     const [agentDateTime, setAgentDateTime] = useState('');
+    const [hasAccount, setHasAccount] = useState(true);
+    const [useThirdParty, setUseThirdParty] = useState(false);
+    
     const [agentInstructions, setAgentInstructions] = useState('');
     const [isGeneratingInstructions, setIsGeneratingInstructions] = useState(false);
     const [showCopySuccess, setShowCopySuccess] = useState(false);
@@ -135,7 +137,15 @@ const ShoppingListView: React.FC<ShoppingListViewProps> = ({ shoppingList, setSh
         const goals = settings.people.map(p => `${p.name}: ${JSON.stringify(p.goals)}`).join('; ');
 
         try {
-            const instructions = await generateShoppingAgentInstructions(agentStore, agentService, agentDateTime, allItems, goals);
+            const instructions = await generateShoppingAgentInstructions(
+                agentStore, 
+                agentService, 
+                agentDateTime, 
+                allItems, 
+                goals,
+                hasAccount,
+                useThirdParty
+            );
             setAgentInstructions(instructions);
         } catch (error) {
             console.error("Failed to generate instructions:", error);
@@ -331,15 +341,49 @@ const ShoppingListView: React.FC<ShoppingListViewProps> = ({ shoppingList, setSh
                                     </div>
                                 </div>
 
-                                {/* Step 3: Date/Time */}
+                                {/* Step 3: Account & Third Party */}
+                                <div className="space-y-4">
+                                    <label className="block text-sm font-bold text-gray-700">3. Options</label>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <label className="flex items-center p-3 bg-gray-50 rounded-xl border border-gray-200 cursor-pointer hover:bg-white transition-colors">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={hasAccount} 
+                                                onChange={e => setHasAccount(e.target.checked)} 
+                                                className="h-4 w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                                            />
+                                            <div className="ml-3">
+                                                <p className="text-sm font-semibold text-gray-800">I have an account</p>
+                                                <p className="text-[10px] text-gray-500">Agent will navigate to login first.</p>
+                                            </div>
+                                        </label>
+                                        
+                                        {agentService === 'Delivery' && (
+                                            <label className="flex items-center p-3 bg-gray-50 rounded-xl border border-gray-200 cursor-pointer hover:bg-white transition-colors">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={useThirdParty} 
+                                                    onChange={e => setUseThirdParty(e.target.checked)} 
+                                                    className="h-4 w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                                                />
+                                                <div className="ml-3">
+                                                    <p className="text-sm font-semibold text-gray-800">Use Third-Party Delivery</p>
+                                                    <p className="text-[10px] text-gray-500">e.g., Shop via Instacart.</p>
+                                                </div>
+                                            </label>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Step 4: Date/Time */}
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-2">3. Day & Time</label>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">4. Day & Time</label>
                                     <input 
                                         type="text" 
                                         placeholder="e.g., Tomorrow at 5pm, Friday Morning" 
                                         value={agentDateTime} 
                                         onChange={e => setAgentDateTime(e.target.value)} 
-                                        className="w-full border-gray-300 rounded-xl shadow-sm focus:ring-purple-500 focus:border-purple-500 py-3"
+                                        className="w-full border-gray-300 rounded-xl shadow-sm focus:ring-purple-500 focus:border-purple-500 py-3 px-4"
                                     />
                                 </div>
 
@@ -377,7 +421,7 @@ const ShoppingListView: React.FC<ShoppingListViewProps> = ({ shoppingList, setSh
                                             </button>
                                         </div>
                                         <p className="text-xs text-gray-500 mt-3">
-                                            This instruction is optimized for an autonomous agent. It includes health goals, price constraints, and explicit steps to handle login and cart confirmation.
+                                            This instruction is optimized for an autonomous agent. It includes login handover, specific item filtering, and service type details.
                                         </p>
                                     </div>
                                 )}

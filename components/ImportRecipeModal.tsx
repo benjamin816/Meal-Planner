@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { XIcon, LoadingIcon, ImportIcon } from './Icons';
 import { parseRecipeFromTextWithGemini } from '../services/geminiService';
@@ -43,8 +44,8 @@ const ImportRecipeModal: React.FC<ImportRecipeModalProps> = ({ onClose, onRecipe
                 throw new Error("Could not extract text content from the URL.");
             }
 
-            const availableTags = allTags[category] || [];
-            const recipeData = await parseRecipeFromTextWithGemini(cleanText, availableTags);
+            // Fix: remove second argument as parseRecipeFromTextWithGemini only expects 1 argument
+            const recipeData = await parseRecipeFromTextWithGemini(cleanText);
             onRecipeImported({ ...recipeData, category });
 
         } catch (err: any) {

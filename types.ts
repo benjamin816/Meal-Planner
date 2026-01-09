@@ -1,17 +1,19 @@
 
-
 export interface Tab {
   id: 'planner' | 'shopping' | 'meals' | 'log' | 'settings';
   label: string;
 }
 
-export type RecipeTag = string;
-
 export enum RecipeCategory {
   Breakfast = 'Breakfast',
   Dinner = 'Dinner',
   Snack = 'Snack',
+  Drink = 'Drink',
 }
+
+export type UsageIntensity = 'light' | 'normal' | 'heavy';
+
+export type RecipeTag = 'affordable' | 'high protein' | 'low cal' | 'high cal' | 'premium' | 'easy to cook' | 'longer to cook' | 'on-the-go' | 'microwave' | 'needs prepared';
 
 export interface NutritionGoals {
   calories: number;
@@ -25,27 +27,30 @@ export interface Person {
   goals: NutritionGoals;
 }
 
+export type DayOfWeek = 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday';
+
+export interface DaySettings {
+    breakfast: boolean;
+    lunch: boolean;
+    dinner: boolean;
+    snack: boolean;
+}
+
 export interface Settings {
   planDurationWeeks: number;
   numberOfPeople: number;
-  servingsPerPerson: number;
+  useLeftoverForLunch: boolean;
+  autoAdjustPortions: boolean;
+  fudgeRoom: number;
+  minMealGapDays: number;
+  dinnersPerWeek: number;
+  breakfastsPerWeek: number;
+  snacksPerWeek: number;
+  lunchesPerWeek: number;
+  defaultDrinksPerPersonPerDay: number;
+  maxUsesPerRecipePerPlan: number;
   leftoverStrategy: 'next_day' | 'day_after' | 'random';
-  mealsPerWeek: {
-    weekdayBreakfasts: number;
-    weekendBreakfasts: number;
-    weekdayDinners: number;
-    weekendDinners: number;
-    weekdaySnacks: number;
-    weekendSnacks: number;
-  };
-  generationTags: {
-    weekendDinner: RecipeTag[];
-    weekdayDinner: RecipeTag[];
-    weekendBreakfast: RecipeTag[];
-    weekdayBreakfast: RecipeTag[];
-    weekdaySnack: RecipeTag[];
-    weekendSnack: RecipeTag[];
-  };
+  dailyMeals: Record<DayOfWeek, DaySettings>;
   people: Person[];
   blacklistedIngredients: string[];
 }
@@ -53,10 +58,11 @@ export interface Settings {
 export interface Recipe {
     id: string;
     name: string;
+    description?: string;
     category: RecipeCategory;
-    tags: RecipeTag[];
     ingredients: string;
     instructions: string;
+    tags: RecipeTag[];
     macros: {
         calories: number;
         protein: number;
@@ -65,38 +71,50 @@ export interface Recipe {
     };
     healthScore: number;
     scoreReasoning: string;
-    rating: number;
-    servings: number;
+    usageIntensity: UsageIntensity; 
+    servings: number; 
     isAlsoBreakfast?: boolean;
-    // New fields for variations
-    baseRecipeId?: string; // If this is a variation, this points to the original recipe's ID.
-    variationName?: string; // e.g., "Vegetarian version"
+    isAlsoSnack?: boolean;
+    isDefaultDrink?: boolean;
+    baseRecipeId?: string;
+    variationName?: string;
 }
 
-export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+export type MealType = 'breakfast' | 'lunch' | 'snack' | 'dinner' | 'drink';
 
 export interface PlannedMeal {
     breakfast?: Recipe;
+    breakfastPortions?: number[]; // One per person
     lunch?: Recipe;
+    lunchPortions?: number[]; // One per person
     dinner?: Recipe;
+    dinnerPortions?: number[]; // One per person
     snack?: Recipe;
+    snackPortions?: number[]; // One per person
+    drink?: Recipe;
+    drinkQuantity?: number; // per person
+    isMealPrepDay?: boolean;
 }
 
-export type MealPlan = Map<string, PlannedMeal>; // Key is YYYY-MM-DD date string
+export type MealPlan = Map<string, PlannedMeal>;
 
-export type EatenLog = Map<string, Partial<Record<MealType, boolean>>>; // Key is YYYY-MM-DD date string
+export type EatenLog = Map<string, Partial<Record<MealType, boolean>>>;
 
 export interface GeneratedRecipeData {
     name: string;
+    description?: string;
     ingredients: string;
     instructions: string;
     category: RecipeCategory;
-    tags: RecipeTag[];
     servings: number;
+    isAlsoBreakfast?: boolean;
+    isAlsoSnack?: boolean;
+    usageIntensity?: UsageIntensity;
 }
 
 export interface BulkParsedRecipe {
     name: string;
+    description?: string;
     ingredients: string;
     instructions: string;
     category: RecipeCategory;
@@ -109,7 +127,10 @@ export interface BulkParsedRecipe {
     };
     healthScore: number;
     scoreReasoning: string;
+    usageIntensity: UsageIntensity;
     servings: number;
+    isAlsoBreakfast?: boolean;
+    isAlsoSnack?: boolean;
 }
 
 export interface ShoppingListItem {
@@ -122,4 +143,23 @@ export interface ShoppingListCategory {
     id: string;
     name: string;
     items: ShoppingListItem[];
+}
+
+export interface SimilarityGroup {
+    primaryRecipeId: string;
+    similarRecipeIds: string[];
+    reasoning: string;
+}
+
+// New types for Batch Prep Workflow
+export interface PrepWorkflowStep {
+    title: string;
+    description: string;
+    estimatedMinutes: number;
+    type: 'setup' | 'prep' | 'cooking' | 'storage';
+}
+
+export interface PrepWorkflow {
+    requiredIngredients: string[];
+    steps: PrepWorkflowStep[];
 }

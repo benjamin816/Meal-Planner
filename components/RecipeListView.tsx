@@ -9,6 +9,7 @@ interface RecipeListViewProps {
   onAiEditRecipe: (recipe: Recipe) => void;
   onDeleteRecipe: (recipeId: string) => void;
   allTags: Record<RecipeCategory, RecipeTag[]>;
+  onSetDefaultDrink?: (id: string) => void;
 }
 
 const RecipeGroupCard: React.FC<{
@@ -17,7 +18,8 @@ const RecipeGroupCard: React.FC<{
     onSelectRecipe: (recipe: Recipe) => void;
     onAiEditRecipe: (recipe: Recipe) => void;
     onDeleteRecipe: (recipeId: string) => void;
-}> = ({ baseRecipe, variations, ...props }) => {
+    onSetDefaultDrink?: (id: string) => void;
+}> = ({ baseRecipe, variations, onSetDefaultDrink, ...props }) => {
     const allVersions = [baseRecipe, ...variations];
     const [activeVariationId, setActiveVariationId] = useState(baseRecipe.id);
     const activeVariation = allVersions.find(r => r.id === activeVariationId) || baseRecipe;
@@ -49,64 +51,39 @@ const RecipeGroupCard: React.FC<{
                 onSelect={props.onSelectRecipe}
                 onAiEdit={props.onAiEditRecipe}
                 onDelete={props.onDeleteRecipe}
+                onSetDefaultDrink={onSetDefaultDrink}
             />
         </div>
     );
 };
 
 
-const RecipeListView: React.FC<RecipeListViewProps> = ({ recipes, onSelectRecipe, onAiEditRecipe, onDeleteRecipe, allTags }) => {
+const RecipeListView: React.FC<RecipeListViewProps> = ({ recipes, onSelectRecipe, onAiEditRecipe, onDeleteRecipe, allTags, onSetDefaultDrink }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<RecipeCategory | 'All'>('All');
-  const [selectedTags, setSelectedTags] = useState<RecipeTag[]>([]);
 
   const recipeGroups = useMemo(() => {
     const groups = new Map<string, { base: Recipe; variations: Recipe[] }>();
-    
-    // Initialize groups with base recipes
     recipes.forEach(r => {
-        if (!r.baseRecipeId) {
-            groups.set(r.id, { base: r, variations: [] });
-        }
+        if (!r.baseRecipeId) groups.set(r.id, { base: r, variations: [] });
     });
-
-    // Add variations to their respective groups
     recipes.forEach(r => {
-        if (r.baseRecipeId && groups.has(r.baseRecipeId)) {
-            groups.get(r.baseRecipeId)!.variations.push(r);
-        }
+        if (r.baseRecipeId && groups.has(r.baseRecipeId)) groups.get(r.baseRecipeId)!.variations.push(r);
     });
     
-    // Filter the groups
     const filteredGroups = Array.from(groups.values()).filter(group => {
-        const allVariations = [group.base, ...group.variations];
         const searchMatch = group.base.name.toLowerCase().includes(searchTerm.toLowerCase());
         const categoryMatch = selectedCategory === 'All' || group.base.category === selectedCategory;
-        const tagMatch = selectedTags.length === 0 || selectedTags.every(tag => allVariations.some(v => v.tags.includes(tag)));
-        return searchMatch && categoryMatch && tagMatch;
+        return searchMatch && categoryMatch;
     });
 
     return filteredGroups.sort((a,b) => a.base.name.localeCompare(b.base.name));
-  }, [recipes, searchTerm, selectedCategory, selectedTags]);
-
-  const availableTags = useMemo(() => {
-    if (selectedCategory === 'All') {
-        const all = new Set<RecipeTag>();
-        // Fix: Property 'forEach' does not exist on type 'unknown'.
-        (Object.values(allTags) as RecipeTag[][]).forEach(tagList => tagList.forEach(t => all.add(t)));
-        return Array.from(all).sort();
-    }
-    return allTags[selectedCategory] || [];
-  }, [allTags, selectedCategory]);
-
-  const handleTagClick = (tag: RecipeTag) => {
-    setSelectedTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
-  };
+  }, [recipes, searchTerm, selectedCategory]);
 
   return (
     <div>
         <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <input
                     type="text"
                     placeholder="Search recipes..."
@@ -123,16 +100,6 @@ const RecipeListView: React.FC<RecipeListViewProps> = ({ recipes, onSelectRecipe
                     {Object.values(RecipeCategory).map(cat => <option key={cat} value={cat}>{cat}</option>)}
                 </select>
             </div>
-            <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Tags:</label>
-                <div className="flex flex-wrap gap-2">
-                    {availableTags.map(tag => (
-                         <button type="button" key={tag} onClick={() => handleTagClick(tag)} className={`py-1 px-3 rounded-full text-sm transition-colors ${selectedTags.includes(tag) ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
-                            {tag}
-                        </button>
-                    ))}
-                </div>
-            </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {recipeGroups.map(group => (
@@ -143,6 +110,7 @@ const RecipeListView: React.FC<RecipeListViewProps> = ({ recipes, onSelectRecipe
                     onSelectRecipe={onSelectRecipe}
                     onAiEditRecipe={onAiEditRecipe}
                     onDeleteRecipe={onDeleteRecipe}
+                    onSetDefaultDrink={onSetDefaultDrink}
                 />
             ))}
         </div>
