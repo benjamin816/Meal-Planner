@@ -1,4 +1,3 @@
-
 import { Tab, RecipeCategory, Settings, Recipe, DaySettings, RecipeTag } from './types';
 
 export const TABS: Tab[] = [
@@ -18,9 +17,9 @@ export const DEFAULT_ALL_TAGS: Record<RecipeCategory, RecipeTag[]> = {
 
 export const INITIAL_RECIPES: Recipe[] = [
     {
-        id: 'seed_1',
+        id: 'r_1',
         name: 'Lemon Herb Salad with Chickpeas and Chicken',
-        description: 'A zesty, high-protein Mediterranean salad that stays fresh for days.',
+        description: 'A zesty, high-protein Mediterranean salad.',
         category: RecipeCategory.Dinner,
         tags: [],
         ingredients: '7 oz Chicken breast\n1/2 can Chickpeas\n2.5 cups Mixed greens\n1/4 Cucumber\n1/2 cup Cherry tomatoes\n1/8 Red onion\n1 tbsp Olive oil\n1/2 Lemon (juiced)\n1/2 tsp Dried oregano',
@@ -32,23 +31,9 @@ export const INITIAL_RECIPES: Recipe[] = [
         servings: 1
     },
     {
-        id: 'seed_2',
-        name: 'Zesty Salmon Salad Bowl',
-        description: 'Heart-healthy salmon paired with creamy avocado and fresh spinach.',
-        category: RecipeCategory.Dinner,
-        tags: [],
-        ingredients: '6 oz Salmon\n2 cups Spinach\n1/2 Avocado\n1/4 cup Quinoa (dry)\n1/4 Cucumber\n1 tsp Olive oil\n1/4 Lemon (juiced)',
-        instructions: '1. Bake salmon at 400F for 12 mins.\n2. Cook quinoa.\n3. Assemble bowl with spinach base.\n4. Top with salmon and avocado.',
-        macros: { calories: 580, protein: 38, carbs: 22, fat: 40 },
-        healthScore: 9.8,
-        scoreReasoning: 'Rich in Omega-3s.',
-        usageIntensity: 'normal',
-        servings: 1
-    },
-    {
-        id: 'seed_3',
+        id: 'r_2',
         name: 'Southwest Chicken Casserole',
-        description: 'A comforting batch-cook favorite with black beans and corn.',
+        description: 'A comforting batch-cook favorite.',
         category: RecipeCategory.Dinner,
         tags: [],
         ingredients: '6 oz Chicken\n1/2 cup Black beans\n1/4 cup Corn\n1/4 cup Salsa\n1/4 cup Greek yogurt\n1/4 cup Cheddar\n2 Corn tortillas',
@@ -60,9 +45,9 @@ export const INITIAL_RECIPES: Recipe[] = [
         servings: 1
     },
     {
-        id: 'seed_4',
+        id: 'r_3',
         name: 'Mongolian Ground Beef Bowl',
-        description: 'Sweet and savory lean beef served over fluffy rice.',
+        description: 'Sweet and savory lean beef over rice.',
         category: RecipeCategory.Dinner,
         tags: [],
         ingredients: '6 oz Lean ground beef\n1 cup Jasmine rice (cooked)\n1 tbsp Soy sauce\n1 tsp Brown sugar\n1/2 tsp Ginger\n1/2 tsp Garlic\n1 green onion\n1 cup Broccoli',
@@ -74,9 +59,9 @@ export const INITIAL_RECIPES: Recipe[] = [
         servings: 1
     },
     {
-        id: 'seed_5',
+        id: 'r_4',
         name: 'Greek Chicken Brown Rice Bowl',
-        description: 'Classic Mediterranean flavors with whole grain brown rice.',
+        description: 'Mediterranean flavors with whole grain brown rice.',
         category: RecipeCategory.Dinner,
         tags: [],
         ingredients: '6 oz Chicken thighs\n3/4 cup Brown rice (cooked)\n1/4 Cucumber\n1/4 cup Cherry tomatoes\n5 Kalamata olives\n1 oz Feta\n1 tbsp Tzatziki',
@@ -88,9 +73,9 @@ export const INITIAL_RECIPES: Recipe[] = [
         servings: 1
     },
     {
-        id: 'seed_6',
+        id: 'r_5',
         name: 'Salsa Chicken Burrito Bowl',
-        description: 'Ultra-lean chicken slow-cooked in salsa for maximum flavor.',
+        description: 'Ultra-lean chicken slow-cooked in salsa.',
         category: RecipeCategory.Dinner,
         tags: [],
         ingredients: '6 oz Chicken breast\n1 tsp Taco seasoning\n1/4 cup Salsa\n3/4 cup Brown rice (cooked)\n1/2 cup Black beans\n1/4 cup Corn\n1 tbsp Greek yogurt\nCilantro',
@@ -102,9 +87,9 @@ export const INITIAL_RECIPES: Recipe[] = [
         servings: 1
     },
     {
-        id: 'seed_7',
+        id: 'r_6',
         name: 'Turkey & Sweet Potato Power Bowl',
-        description: 'Complex carbs and lean protein for sustained energy.',
+        description: 'Complex carbs and lean protein.',
         category: RecipeCategory.Dinner,
         tags: [],
         ingredients: '6 oz Ground turkey\n1 Sweet potato\n1/4 cup Cottage cheese\n1 cup Spinach\n1/2 tsp Paprika',
@@ -116,7 +101,7 @@ export const INITIAL_RECIPES: Recipe[] = [
         servings: 1
     },
     {
-        id: 'seed_8',
+        id: 'r_7',
         name: 'High-Protein Chicken Fried Rice',
         description: 'A healthier take on the takeout classic.',
         category: RecipeCategory.Dinner,
@@ -130,7 +115,7 @@ export const INITIAL_RECIPES: Recipe[] = [
         servings: 1
     },
     {
-        id: 'seed_9',
+        id: 'r_8',
         name: 'Chicken Teriyaki with Pineapple',
         description: 'Sweet pineapple and savory teriyaki glaze.',
         category: RecipeCategory.Dinner,
@@ -144,9 +129,9 @@ export const INITIAL_RECIPES: Recipe[] = [
         servings: 1
     },
     {
-        id: 'seed_10',
+        id: 'r_9',
         name: 'Baked Buffalo Chicken Strips',
-        description: 'Crispy baked tenders with a spicy buffalo kick.',
+        description: 'Spicy baked tenders with a buffalo kick.',
         category: RecipeCategory.Dinner,
         tags: [],
         ingredients: '6 oz Chicken tenderloins\n1/4 cup Panko\n2 tbsp Buffalo sauce\n1/2 Egg (for dredge)\n1 cup Brussels sprouts',
@@ -158,7 +143,7 @@ export const INITIAL_RECIPES: Recipe[] = [
         servings: 1
     },
     {
-        id: 'seed_11',
+        id: 'r_10',
         name: 'Protein Pasta with Turkey Meatballs',
         description: 'Lentil pasta and lean turkey meatballs.',
         category: RecipeCategory.Dinner,
@@ -172,9 +157,9 @@ export const INITIAL_RECIPES: Recipe[] = [
         servings: 1
     },
     {
-        id: 'seed_12',
+        id: 'r_11',
         name: 'Cottage Cheese Power Bowl',
-        description: 'Quick protein-packed bowl with berries and seeds.',
+        description: 'Quick protein-packed bowl with berries.',
         category: RecipeCategory.Breakfast,
         tags: [],
         ingredients: '1 cup Cottage cheese\n1/2 cup Berries\n1 tbsp Chia seeds',
@@ -187,22 +172,22 @@ export const INITIAL_RECIPES: Recipe[] = [
         isAlsoSnack: true
     },
     {
-        id: 'seed_yogurt_bowl',
+        id: 'r_12',
         name: 'Greek Yogurt Power Bowl',
-        description: 'Nutrient-dense bowl with Greek yogurt, mixed berries, and chia seeds.',
+        description: 'High protein, probiotic, and fiber.',
         category: RecipeCategory.Breakfast,
         tags: ['high protein', 'easy to cook'],
         ingredients: '1 cup Greek yogurt\n1/2 cup Mixed berries\n1 tbsp Chia seeds',
         instructions: '1. Place yogurt in a bowl.\n2. Top with berries and chia seeds.',
         macros: { calories: 310, protein: 25, carbs: 32, fat: 9 },
         healthScore: 9.8,
-        scoreReasoning: 'High protein, probiotic, and fiber.',
+        scoreReasoning: 'Excellent nutrient density.',
         usageIntensity: 'heavy',
         servings: 1,
         isAlsoSnack: true
     },
     {
-        id: 'seed_13',
+        id: 'r_13',
         name: 'Greek Yogurt & Whey Bowl',
         description: 'Maximum protein with minimal effort.',
         category: RecipeCategory.Breakfast,
@@ -217,7 +202,7 @@ export const INITIAL_RECIPES: Recipe[] = [
         isAlsoSnack: true
     },
     {
-        id: 'seed_15',
+        id: 'r_14',
         name: 'Egg Whites & Sausage Bowl',
         description: 'Volume-heavy breakfast for fat loss.',
         category: RecipeCategory.Breakfast,
@@ -231,7 +216,7 @@ export const INITIAL_RECIPES: Recipe[] = [
         servings: 1
     },
     {
-        id: 'seed_16',
+        id: 'r_15',
         name: 'Greek Yogurt Cup',
         description: 'Portable and simple individual snack.',
         category: RecipeCategory.Snack,
@@ -246,7 +231,7 @@ export const INITIAL_RECIPES: Recipe[] = [
         isAlsoBreakfast: true
     },
     {
-        id: 'seed_17',
+        id: 'r_16',
         name: 'Cottage Cheese Cup',
         description: 'Individual serve of protein-rich cottage cheese.',
         category: RecipeCategory.Snack,
@@ -261,7 +246,7 @@ export const INITIAL_RECIPES: Recipe[] = [
         isAlsoBreakfast: true
     },
     {
-        id: 'seed_19',
+        id: 'r_17',
         name: 'Beef Jerky',
         description: 'Savory dried beef snack high in protein.',
         category: RecipeCategory.Snack,
@@ -275,9 +260,9 @@ export const INITIAL_RECIPES: Recipe[] = [
         servings: 1
     },
     {
-        id: 'seed_20',
+        id: 'r_18',
         name: 'Roasted Edamame',
-        description: 'Crunchy plant-based protein with plenty of fiber.',
+        description: 'Crunchy plant-based protein with fiber.',
         category: RecipeCategory.Snack,
         tags: [],
         ingredients: '1/4 cup Roasted edamame',
@@ -289,7 +274,7 @@ export const INITIAL_RECIPES: Recipe[] = [
         servings: 1
     },
     {
-        id: 'seed_coffee_almond',
+        id: 'r_19',
         name: 'Black Coffee with Almond Milk',
         description: 'Standard morning drink: 1 cup coffee with 1/2 cup unsweetened almond milk.',
         category: RecipeCategory.Drink,
@@ -304,16 +289,44 @@ export const INITIAL_RECIPES: Recipe[] = [
         isDefaultDrink: true
     },
     {
-        id: 'seed_21',
+        id: 'r_20',
         name: 'Turkey & Quest Chip Walking Taco',
-        description: 'A fun, high-protein take on the walking taco using protein chips.',
+        description: 'High-protein walking taco using protein chips.',
         category: RecipeCategory.Dinner,
         tags: ['high protein', 'easy to cook'],
         ingredients: '1 bag (1.1 oz) Quest Protein Chips (Taco flavor)\n4 oz Lean Ground Turkey (93% lean)\n1/4 cup Shredded Cheddar Cheese\n1/4 cup Shredded Lettuce\n1 tbsp Sour Cream\n2 tsp Low-sodium Taco Seasoning',
-        instructions: '1. In a skillet over medium heat, cook the ground turkey until browned and no longer pink. Drain excess fat if necessary.\n2. Stir in the taco seasoning and a small splash of water. Simmer for 2-3 minutes until the liquid reduces and meat is coated.\n3. Gently crush the Quest chips inside the bag (do not pulverize). Cut the top off the bag lengthwise.\n4. Spoon the cooked turkey directly into the chip bag (or pour chips into a bowl if preferred).\n5. Top with shredded cheese, lettuce, and a dollop of sour cream. Mix slightly and eat with a fork.',
+        instructions: '1. In a skillet over medium heat, cook the ground turkey until browned. Drain excess fat.\n2. Stir in the taco seasoning and water. Simmer for 2-3 minutes.\n3. Gently crush Quest chips inside the bag. Cut the top off.\n4. Spoon turkey into the bag.\n5. Top with cheese, lettuce, and sour cream. Eat with a fork.',
         macros: { calories: 460, protein: 49, carbs: 9, fat: 26 },
         healthScore: 7.5,
-        scoreReasoning: 'Extremely high protein content, but uses processed components.',
+        scoreReasoning: 'High protein content.',
+        usageIntensity: 'normal',
+        servings: 1
+    },
+    {
+        id: 'r_21',
+        name: 'Loaded Quest Protein Nachos',
+        description: 'Protein nachos using tortilla style protein chips.',
+        category: RecipeCategory.Dinner,
+        tags: [],
+        ingredients: '1 bag Quest Tortilla Style Protein Chips (Taco or Chili Lime flavor)\n3 oz 93% lean ground turkey, cooked and seasoned\n1/2 cup fat-free refried beans\n1/4 cup shredded cheddar or Mexican blend cheese\n1 tbsp black olives, sliced\n2 tbsp diced tomatoes\n1/4 cup shredded lettuce\n1 tbsp sour cream',
+        instructions: '1. Warm turkey and beans.\n2. Arrange chips on a plate.\n3. Layer beans and turkey over chips.\n4. Sprinkle cheese on top (microwave 15-20s if desired).\n5. Garnish with lettuce, tomatoes, olives, and sour cream.\n6. Serve immediately.',
+        macros: { calories: 480, protein: 45, carbs: 15, fat: 28 },
+        healthScore: 8.0,
+        scoreReasoning: 'High protein with controlled fats.',
+        usageIntensity: 'normal',
+        servings: 1
+    },
+    {
+        id: 'r_22',
+        name: 'Zesty Salmon & Brown Rice Bowl',
+        description: 'Salmon paired with creamy avocado and fresh spinach.',
+        category: RecipeCategory.Dinner,
+        tags: [],
+        ingredients: '6 oz Salmon\n2 cups Spinach\n1/2 Avocado\n1/4 cup Brown Rice (dry)\n1/4 Cucumber\n1 tsp Olive oil\n1/4 Lemon (juiced)',
+        instructions: '1. Bake salmon at 400F for 12 mins.\n2. Cook brown rice.\n3. Assemble bowl with spinach base.\n4. Top with salmon, rice, cucumber, and avocado.\n5. Drizzle with olive oil and lemon juice.',
+        macros: { calories: 580, protein: 38, carbs: 32, fat: 34 },
+        healthScore: 9.0,
+        scoreReasoning: 'Rich in Omega-3s and healthy fats.',
         usageIntensity: 'normal',
         servings: 1
     }

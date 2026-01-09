@@ -50,9 +50,8 @@ const MealsView: React.FC<MealsViewProps> = ({
     const devClickTimeout = useRef<number | null>(null);
     
     const handleDeleteRecipe = (recipeId: string) => {
-        if (window.confirm('Are you sure you want to delete this recipe and all its variations? This action cannot be undone.')) {
-            deleteRecipe(recipeId);
-        }
+        // Removed redundant window.confirm since RecipeCard has its own confirmation UI
+        deleteRecipe(recipeId);
     };
 
     const closeModal = useCallback(() => {

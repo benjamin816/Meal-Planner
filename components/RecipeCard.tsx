@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+
+import React from 'react';
 import { Recipe, UsageIntensity, RecipeCategory } from '../types';
-import { StarIcon, MagicWandIcon } from './Icons';
+import { StarIcon, MagicWandIcon, TrashIcon } from './Icons';
 
 interface RecipeCardProps {
   recipe: Recipe;
@@ -76,22 +77,13 @@ const HealthScoreCircle = ({ score }: { score: number }) => {
 };
 
 const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onSelect, onAiEdit, onDelete, onSetDefaultDrink }) => {
-  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
-  const confirmTimeout = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (isConfirmingDelete) {
-      confirmTimeout.current = window.setTimeout(() => {
-        setIsConfirmingDelete(false);
-      }, 5000);
-    }
-    return () => {
-      if (confirmTimeout.current) window.clearTimeout(confirmTimeout.current);
-    };
-  }, [isConfirmingDelete]);
-
   const isDrink = recipe.category === RecipeCategory.Drink;
   const macros = recipe.macros || { calories: 0, protein: 0, carbs: 0, fat: 0 };
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onDelete(recipe.id);
+  };
 
   return (
     <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden flex flex-col h-full hover:shadow-lg transition-shadow duration-200 fade-in">
@@ -149,17 +141,8 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onSelect, onAiEdit, onD
             )}
         </div>
         <div className="flex space-x-2">
-            {isConfirmingDelete ? (
-            <>
-                <button onClick={(e) => { e.stopPropagation(); onDelete(recipe.baseRecipeId || recipe.id); }} className="text-sm text-red-700 bg-red-100 hover:bg-red-200 font-semibold px-2 py-1 rounded-md transition-colors">Confirm</button>
-                <button onClick={(e) => { e.stopPropagation(); setIsConfirmingDelete(false); }} className="text-sm text-gray-700 bg-gray-200 hover:bg-gray-300 font-semibold px-2 py-1 rounded-md transition-colors">Cancel</button>
-            </>
-            ) : (
-            <>
-                <button onClick={(e) => { e.stopPropagation(); onAiEdit(recipe); }} className="text-sm text-purple-600 hover:text-purple-800 font-semibold inline-flex items-center"><MagicWandIcon className="h-4 w-4 mr-1"/> AI Edit</button>
-                <button onClick={(e) => { e.stopPropagation(); setIsConfirmingDelete(true); }} className="text-sm text-red-600 hover:text-red-800 font-semibold">Delete</button>
-            </>
-            )}
+            <button onClick={(e) => { e.stopPropagation(); onAiEdit(recipe); }} className="text-sm text-purple-600 hover:text-purple-800 font-semibold inline-flex items-center"><MagicWandIcon className="h-4 w-4 mr-1"/> AI Edit</button>
+            <button onClick={handleDelete} className="text-sm text-red-600 hover:text-red-800 font-semibold inline-flex items-center"><TrashIcon className="h-4 w-4 mr-1"/> Delete</button>
         </div>
       </div>
     </div>

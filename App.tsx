@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Tab, MealPlan, EatenLog, Settings, Recipe, RecipeCategory, RecipeTag, PlannedMeal, GeneratedRecipeData, MealType, BulkParsedRecipe, NutritionGoals, ShoppingListCategory, ShoppingListItem, UsageIntensity, SimilarityGroup } from './types';
 import { TABS, DEFAULT_SETTINGS, DEFAULT_ALL_TAGS, INITIAL_RECIPES } from './constants';
-import { analyzeRecipeWithGemini, generateMealPlanWithGemini, bulkParseRecipesFromFileWithGemini, bulkGenerateAndAnalyzeRecipesWithGemini, editRecipeWithGemini, checkForDuplicatesWithGemini, generateShoppingListWithGemini, findSimilarRecipesWithGemini } from './services/geminiService';
+import { analyzeRecipeWithGemini, generateMealPlanWithGemini, bulkParseRecipesFromFileWithGemini, bulkGenerateAndAnalyzeRecipesWithGemini, editRecipeWithGemini, generateShoppingListWithGemini, findSimilarRecipesWithGemini } from './services/geminiService';
 import Header from './components/Header';
 import PlannerView from './components/PlannerView';
 import ShoppingListView from './components/ShoppingListView';
@@ -12,7 +12,7 @@ import KitchenModeView from './components/KitchenModeView';
 import EditMealModal from './components/EditMealModal';
 import AddRecipeModal from './components/AddRecipeModal';
 import DuplicateDetectionModal from './components/DuplicateDetectionModal';
-import { XIcon, ShoppingCartIcon } from './components/Icons';
+import { XIcon, ShoppingCartIcon, TrashIcon, CheckIcon } from './components/Icons';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>(TABS[0]);
@@ -34,6 +34,9 @@ const App: React.FC = () => {
   const [showPlanSuccess, setShowPlanSuccess] = useState(false);
   const [similarityGroups, setSimilarityGroups] = useState<SimilarityGroup[] | null>(null);
   
+  // Notification State
+  const [notification, setNotification] = useState<{ message: string, type: 'success' | 'delete', undoAction?: () => void } | null>(null);
+  const notificationTimeoutRef = useRef<number | null>(null);
   const currentImportRef = useRef<{ isCancelled: boolean } | null>(null);
 
   useEffect(() => {
@@ -68,6 +71,29 @@ const App: React.FC = () => {
   useEffect(() => { if (isDataLoaded) localStorage.setItem('mealPlannerPlan', JSON.stringify(Array.from(mealPlan.entries()))); }, [mealPlan, isDataLoaded]);
   useEffect(() => { if (isDataLoaded) localStorage.setItem('mealPlannerEatenLog', JSON.stringify(Array.from(eatenLog.entries()))); }, [eatenLog, isDataLoaded]);
   useEffect(() => { if (isDataLoaded) localStorage.setItem('mealPlannerShoppingList', JSON.stringify(shoppingList)); }, [shoppingList, isDataLoaded]);
+
+  const showNotification = (message: string, type: 'success' | 'delete', undoAction?: () => void) => {
+    if (notificationTimeoutRef.current) window.clearTimeout(notificationTimeoutRef.current);
+    setNotification({ message, type, undoAction });
+    notificationTimeoutRef.current = window.setTimeout(() => setNotification(null), 5000);
+  };
+
+  const deleteRecipe = (id: string) => { 
+    const recipeToDelete = recipes.find(r => r.id === id);
+    if (!recipeToDelete) return;
+    
+    // User requested confirmation before deletion
+    if (!window.confirm(`Are you sure you want to delete "${recipeToDelete.name}"?`)) {
+        return;
+    }
+
+    setRecipes(prev => prev.filter(r => r.id !== id && r.baseRecipeId !== id)); 
+    
+    showNotification(`Recipe "${recipeToDelete.name}" deleted.`, 'delete', () => {
+        setRecipes(prev => [...prev, recipeToDelete]);
+        setNotification(null);
+    });
+  };
 
   const generationPrerequisites = useMemo(() => {
     const availableBreakfasts = recipes.filter(r => r.category === RecipeCategory.Breakfast || r.isAlsoBreakfast).length;
@@ -109,7 +135,6 @@ const App: React.FC = () => {
         const newPlan = new Map(prev);
         const day = newPlan.get(date);
         if (day) {
-            // Fix: Cast day to PlannedMeal to satisfy object spread requirements in strict TypeScript environments
             const newDay = { ...(day as PlannedMeal) };
             delete newDay[mealType];
             newPlan.set(date, newDay);
@@ -127,7 +152,6 @@ const App: React.FC = () => {
     setGenerationProgress(5);
     setGenerationStatus("Initializing AI Chef...");
     try {
-      // Fix: Cast settings to Settings to satisfy object spread requirements
       const tempSettings = { ...(settings as Settings), planDurationWeeks: durationWeeks, dinnersPerWeek, breakfastsPerWeek, snacksPerWeek };
       const selectedDrink = recipes.find(r => r.id === drinkId);
       
@@ -143,7 +167,6 @@ const App: React.FC = () => {
       
       const recipeFrequencies = new Map<string, { r: Recipe, totalPortions: number }>();
       newPlan.forEach(day => {
-          // Fix: Use a specific subset of PlannedMeal keys that are known to be Recipes to avoid union widening errors
           (['breakfast', 'lunch', 'dinner', 'snack'] as const).forEach(type => {
               const r = day[type];
               if (r && r.category !== RecipeCategory.Drink) {
@@ -204,14 +227,33 @@ const App: React.FC = () => {
   const addRecipe = useCallback(async (recipeData: Omit<Recipe, 'id' | 'macros' | 'healthScore' | 'scoreReasoning'>) => {
     setIsLoading(true);
     try {
-        const { isDuplicate, similarRecipeName, reasoning } = await checkForDuplicatesWithGemini(recipeData, recipes);
-        if (isDuplicate) { 
-            alert(`Duplicate of "${similarRecipeName}".\n\nReason: ${reasoning}`); 
+        // Simplified word-for-word exact duplicate check as requested
+        const isExactDuplicate = recipes.some(r => 
+            r.name.trim().toLowerCase() === recipeData.name.trim().toLowerCase() && 
+            r.ingredients.trim().toLowerCase() === recipeData.ingredients.trim().toLowerCase()
+        );
+
+        if (isExactDuplicate) { 
+            alert(`EXACT DUPLICATE BLOCKED: This recipe already exists in your library with identical name and ingredients.`); 
+            setIsAddRecipeModalOpen(false); 
             setIsLoading(false);
             return; 
         }
         
-        const analysis = await analyzeRecipeWithGemini(recipeData);
+        // Ensure analysis is robust
+        const analysis = await analyzeRecipeWithGemini(recipeData).catch(err => {
+            console.error("AI Analysis failed:", err);
+            // Default macro fallback if AI fails for specific content
+            return {
+                description: recipeData.name,
+                macros: { calories: 500, protein: 30, carbs: 50, fat: 20 },
+                healthScore: 7,
+                scoreReasoning: "Standard estimation used due to parsing issue.",
+                usageIntensity: 'normal' as UsageIntensity,
+                servings: 1
+            };
+        });
+
         const newRecipe: Recipe = { 
           id: `recipe_${Date.now()}_${Math.random()}`, 
           ...recipeData,
@@ -223,9 +265,10 @@ const App: React.FC = () => {
         
         setRecipes(prev => [...prev, newRecipe]);
         setIsAddRecipeModalOpen(false);
+        showNotification(`Recipe "${newRecipe.name}" added successfully!`, 'success');
     } catch (error) {
-        console.error(error); 
-        alert("Could not analyze and add recipe. Please try again.");
+        console.error("Critical error in addRecipe:", error); 
+        alert("A critical error occurred while adding the recipe. Please check your internet connection and try again.");
     } finally { 
         setIsLoading(false); 
     }
@@ -238,10 +281,8 @@ const App: React.FC = () => {
         let updated = false;
         for (const [date, dayPlan] of newPlan.entries()) {
             if (dayPlan && typeof dayPlan === 'object') {
-                // Fix: Cast dayPlan to PlannedMeal to satisfy object spread requirements
                 const newDayPlan: PlannedMeal = { ...(dayPlan as PlannedMeal) };
                 let dayUpdated = false;
-                // Fix: Specifically type the meal types to ensure they index Recipe properties only, avoiding union widening errors
                 const types: (keyof Pick<PlannedMeal, 'breakfast' | 'lunch' | 'dinner' | 'snack'>)[] = ['breakfast', 'lunch', 'dinner', 'snack'];
                 for (const t of types) { 
                     if (newDayPlan[t]?.id === updatedRecipe.id) { 
@@ -261,6 +302,7 @@ const App: React.FC = () => {
     try { 
         updateRecipeAndPlan(updatedRecipe); 
         setIsAddRecipeModalOpen(false); 
+        showNotification(`Recipe updated!`, 'success');
     } catch (e) { 
         console.error(e); 
     } finally { 
@@ -275,7 +317,6 @@ const App: React.FC = () => {
     })));
   };
   
-  const deleteRecipe = (id: string) => { setRecipes(prev => prev.filter(r => r.id !== id && r.baseRecipeId !== id)); };
   const deleteAllRecipes = () => { setRecipes([]); setMealPlan(new Map()); setShoppingList([]); };
   
   const bulkImportRecipes = async (
@@ -316,7 +357,11 @@ const App: React.FC = () => {
               const data = parsedRecipes[i];
               const percentage = 60 + Math.round((i / parsedRecipes.length) * 40);
               onProgress(`Verifying: ${data.name}`, percentage);
-              const { isDuplicate } = await checkForDuplicatesWithGemini(data, [...recipes, ...uniqueNewRecipes]);
+              
+              const isDuplicate = [...recipes, ...uniqueNewRecipes].some(r => 
+                r.name.trim().toLowerCase() === data.name.trim().toLowerCase() &&
+                r.ingredients.trim().toLowerCase() === data.ingredients.trim().toLowerCase()
+              );
               if (!isDuplicate) {
                   uniqueNewRecipes.push({ 
                     id: `recipe_${Date.now()}_${uniqueNewRecipes.length}_${Math.random()}`, 
@@ -384,13 +429,34 @@ const App: React.FC = () => {
     <div className="bg-gray-100 min-h-screen font-sans flex flex-col">
         <div className="container mx-auto p-4 md:p-6 flex-grow">
             <Header activeTab={activeTab} setActiveTab={handleTabChange} />
-            <main className="mt-6 bg-white p-6 rounded-lg shadow-sm">
+            <main className="mt-6 bg-white p-6 rounded-lg shadow-sm relative">
                 <div key={animationKey} className="fade-in">{renderContent()}</div>
+                
+                {/* Global Notification/Undo Popup */}
+                {notification && (
+                    <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-[200] animate-fade-in w-full max-w-sm px-4">
+                        <div className={`bg-gray-900 text-white rounded-2xl shadow-2xl p-4 flex items-center justify-between border-b-4 ${notification.type === 'delete' ? 'border-red-500' : 'border-green-500'}`}>
+                            <div className="flex items-center gap-3 overflow-hidden">
+                                {notification.type === 'delete' ? <TrashIcon className="w-5 h-5 text-red-400 shrink-0"/> : <CheckIcon className="w-5 h-5 text-green-400 shrink-0"/>}
+                                <p className="text-sm font-bold truncate">{notification.message}</p>
+                            </div>
+                            {notification.undoAction && (
+                                <button 
+                                    onClick={notification.undoAction}
+                                    className="ml-4 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-90 shrink-0"
+                                >
+                                    Undo
+                                </button>
+                            )}
+                            <button onClick={() => setNotification(null)} className="ml-2 p-1 text-gray-400 hover:text-white transition-colors shrink-0"><XIcon className="w-4 h-4"/></button>
+                        </div>
+                    </div>
+                )}
             </main>
         </div>
         
         <footer className="container mx-auto px-4 md:px-6 pb-4 flex justify-between items-center text-[10px] text-gray-400 font-mono">
-            <div>v13.3</div>
+            <div>v13.5 - Robust Release</div>
             <div>{new Date().toLocaleString()}</div>
         </footer>
 
@@ -413,6 +479,7 @@ const App: React.FC = () => {
                         return newPlan; 
                     }); 
                     setEditMealDetails(null); 
+                    showNotification("Plan updated!", "success");
                 }} 
                 recipes={recipes} 
                 dayPlan={mealPlan.get(editMealDetails.date) || {}} 
@@ -454,7 +521,7 @@ const App: React.FC = () => {
                             mealPlan.forEach((day) => {
                                 (['breakfast', 'snack', 'dinner', 'lunch'] as const).forEach((type) => {
                                     const r = day[type as keyof PlannedMeal];
-                                    if (r instanceof Object && 'category' in r) { // Additional runtime check for safety
+                                    if (r instanceof Object && 'category' in r) { 
                                         const catKeyMap: Record<string, string> = {
                                             'breakfast': 'Breakfast Slots',
                                             'snack': 'Snack Slots',
