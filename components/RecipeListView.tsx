@@ -1,10 +1,11 @@
 
 import React, { useState, useMemo } from 'react';
-import { Recipe, RecipeCategory, RecipeTag } from '../types';
+import { Recipe, RecipeCategory, RecipeTag, Settings } from '../types';
 import RecipeCard from './RecipeCard';
 
 interface RecipeListViewProps {
   recipes: Recipe[];
+  settings: Settings;
   onSelectRecipe: (recipe: Recipe) => void;
   onAiEditRecipe: (recipe: Recipe) => void;
   onDeleteRecipe: (recipeId: string) => void;
@@ -15,11 +16,12 @@ interface RecipeListViewProps {
 const RecipeGroupCard: React.FC<{
     baseRecipe: Recipe;
     variations: Recipe[];
+    settings: Settings;
     onSelectRecipe: (recipe: Recipe) => void;
     onAiEditRecipe: (recipe: Recipe) => void;
     onDeleteRecipe: (recipeId: string) => void;
     onSetDefaultDrink?: (id: string) => void;
-}> = ({ baseRecipe, variations, onSetDefaultDrink, ...props }) => {
+}> = ({ baseRecipe, variations, settings, onSelectRecipe, onAiEditRecipe, onDeleteRecipe, onSetDefaultDrink }) => {
     const allVersions = [baseRecipe, ...variations];
     const [activeVariationId, setActiveVariationId] = useState(baseRecipe.id);
     const activeVariation = allVersions.find(r => r.id === activeVariationId) || baseRecipe;
@@ -48,17 +50,19 @@ const RecipeGroupCard: React.FC<{
             )}
             <RecipeCard 
                 recipe={activeVariation}
-                onSelect={props.onSelectRecipe}
-                onAiEdit={props.onAiEditRecipe}
-                onDelete={props.onDeleteRecipe}
+                settings={settings}
+                onSelect={onSelectRecipe}
+                onAiEdit={onAiEditRecipe}
+                onDelete={onDeleteRecipe}
                 onSetDefaultDrink={onSetDefaultDrink}
+                showDelete={true}
             />
         </div>
     );
 };
 
 
-const RecipeListView: React.FC<RecipeListViewProps> = ({ recipes, onSelectRecipe, onAiEditRecipe, onDeleteRecipe, allTags, onSetDefaultDrink }) => {
+const RecipeListView: React.FC<RecipeListViewProps> = ({ recipes, settings, onSelectRecipe, onAiEditRecipe, onDeleteRecipe, allTags, onSetDefaultDrink }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<RecipeCategory | 'All'>('All');
 
@@ -107,6 +111,7 @@ const RecipeListView: React.FC<RecipeListViewProps> = ({ recipes, onSelectRecipe
                     key={group.base.id}
                     baseRecipe={group.base}
                     variations={group.variations}
+                    settings={settings}
                     onSelectRecipe={onSelectRecipe}
                     onAiEditRecipe={onAiEditRecipe}
                     onDeleteRecipe={onDeleteRecipe}

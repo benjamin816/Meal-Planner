@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { MealPlan, EatenLog, PlannedMeal, Recipe, MealType, Tab, RecipeCategory, Settings, DaySettings } from '../types';
 import { LoadingIcon, GenerateIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon, ShoppingCartIcon, MagicWandIcon, XIcon, TrashIcon, PlusIcon, StarIcon, HeartIcon } from './Icons';
@@ -16,27 +17,35 @@ interface PlannerViewProps {
   onRemovePlannedMeal: (date: string, mealType: MealType) => void;
   onSwapPlannedMeal: (date: string, mealType: MealType) => void;
   onAddPlannedMeal: (date: string, mealType: MealType) => void;
+  onClearPlan?: () => void;
   setActiveTab: (tab: Tab) => void;
   onViewRecipe: (recipe: Recipe, portions?: number[]) => void;
   hasShoppingItems: boolean;
   generationPrerequisites: { canGenerate: boolean; missingMessage: string };
   defaultUniqueSettings: { dinners: number, breakfasts: number, snacks: number };
+  showPlanSuccess: boolean;
+  setShowPlanSuccess: (show: boolean) => void;
 }
 
 const GenerationProgressIndicator: React.FC<{ percentage: number; status: string }> = ({ percentage, status }) => {
     return (
         <div className="w-full space-y-4">
             <div className="flex justify-between items-end">
-                <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest animate-pulse min-h-[1.5em]">
-                    {status || 'Preparing...'}
-                </span>
+                <div className="flex flex-col">
+                    <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest animate-pulse">
+                        {status || 'Preparing Library...'}
+                    </span>
+                    <span className="text-[8px] font-bold text-gray-400 uppercase mt-0.5">Consulting Gemini AI</span>
+                </div>
                 <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{Math.round(percentage)}%</span>
             </div>
-            <div className="w-full bg-gray-100 rounded-full h-2 shadow-inner overflow-hidden">
+            <div className="w-full bg-gray-100 rounded-full h-2.5 shadow-inner overflow-hidden border border-gray-200">
                 <div 
-                    className="h-full bg-blue-600 transition-all duration-500 ease-out" 
+                    className="h-full bg-blue-600 transition-all duration-300 ease-out relative" 
                     style={{ width: `${percentage}%` }}
-                />
+                >
+                    <div className="absolute inset-0 w-full h-full opacity-30 bg-gradient-to-r from-transparent via-white to-transparent animate-pulse"></div>
+                </div>
             </div>
         </div>
     );
@@ -138,80 +147,6 @@ const DailyMacrosModal: React.FC<{ date: string; plannedMeal: PlannedMeal; setti
     );
 };
 
-const PlanSuccessModal: React.FC<{ mealPlan: MealPlan; onClose: () => void; onGoToShopping: () => void }> = ({ mealPlan, onClose, onGoToShopping }) => {
-    const summary = useMemo(() => {
-        const uniqueRecipes = new Map<string, { recipe: Recipe; count: number }>();
-        mealPlan.forEach((day) => {
-            ['breakfast', 'lunch', 'snack', 'dinner'].forEach((type) => {
-                const r = day[type as keyof PlannedMeal] as Recipe;
-                if (r && r.category !== RecipeCategory.Drink) {
-                    const existing = uniqueRecipes.get(r.id) || { recipe: r, count: 0 };
-                    uniqueRecipes.set(r.id, { ...existing, count: existing.count + 1 });
-                }
-            });
-        });
-
-        const byCategory = {
-            Dinners: [] as { recipe: Recipe; count: number }[],
-            Breakfasts: [] as { recipe: Recipe; count: number }[],
-            Snacks: [] as { recipe: Recipe; count: number }[],
-        };
-
-        uniqueRecipes.forEach((val) => {
-            if (val.recipe.category === RecipeCategory.Dinner) byCategory.Dinners.push(val);
-            else if (val.recipe.category === RecipeCategory.Breakfast || val.recipe.isAlsoBreakfast) byCategory.Breakfasts.push(val);
-            else if (val.recipe.category === RecipeCategory.Snack || val.recipe.isAlsoSnack) byCategory.Snacks.push(val);
-        });
-
-        return byCategory;
-    }, [mealPlan]);
-
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex justify-center items-center z-[100] p-4">
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-fade-in border border-gray-100 flex flex-col max-h-[90vh]">
-                <div className="p-6 border-b border-gray-100 bg-green-50/50 flex justify-between items-center shrink-0">
-                    <div>
-                        <h3 className="text-2xl font-black text-gray-800 tracking-tight">Your Meal Plan is Ready! 🎉</h3>
-                        <p className="text-xs font-bold text-green-600 uppercase tracking-widest mt-1">Diversified & Balanced</p>
-                    </div>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-200 transition-colors shrink-0"><XIcon className="w-6 h-6"/></button>
-                </div>
-                
-                <div className="p-6 space-y-8 overflow-y-auto flex-grow">
-                    {(Object.entries(summary) as [string, { recipe: Recipe; count: number }[]][]).map(([title, recipes]) => recipes.length > 0 && (
-                        <div key={title}>
-                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3 border-b pb-1">{title} Chosen</h4>
-                            <div className="space-y-2">
-                                {recipes.map(({ recipe, count }) => (
-                                    <div key={recipe.id} className="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100 shadow-sm">
-                                        <div className="flex-grow pr-4">
-                                            <p className="text-sm font-black text-gray-800 line-clamp-1">{recipe.name}</p>
-                                        </div>
-                                        <div className="shrink-0 bg-white px-3 py-1 rounded-lg border border-gray-200 text-center min-w-[70px]">
-                                            <p className="text-[10px] font-black text-blue-600 leading-none">{count}</p>
-                                            <p className="text-[8px] font-bold text-gray-400 uppercase tracking-tighter">Meals</p>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-
-                <div className="p-6 border-t bg-gray-50 shrink-0">
-                    <button 
-                        onClick={onGoToShopping}
-                        className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black shadow-xl hover:bg-blue-700 transition-all flex items-center justify-center gap-2 transform active:scale-95"
-                    >
-                        <ShoppingCartIcon className="w-5 h-5" />
-                        VIEW SHOPPING LIST
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
 const SummaryModal: React.FC<{ recipe: Recipe; type: MealType; dayPlan: PlannedMeal; settings: Settings; onClose: () => void; onGoToKitchen: (portions?: number[]) => void }> = ({ recipe, type, dayPlan, settings, onClose, onGoToKitchen }) => {
     const portions = (dayPlan as any)[`${type}Portions`] as number[] | undefined;
     const macros = recipe.macros || { calories: 0, protein: 0, carbs: 0, fat: 0 };
@@ -278,14 +213,14 @@ const PlannerView: React.FC<PlannerViewProps> = ({
     mealPlan, eatenLog, recipes, generatePlan, isLoading, 
     generationProgress, generationStatus,
     onMarkAsEaten, 
-    onRemovePlannedMeal, onSwapPlannedMeal, onAddPlannedMeal,
+    onRemovePlannedMeal, onSwapPlannedMeal, onAddPlannedMeal, onClearPlan,
     setActiveTab, onViewRecipe, hasShoppingItems, generationPrerequisites,
-    defaultUniqueSettings, settings
+    defaultUniqueSettings, settings,
+    showPlanSuccess, setShowPlanSuccess
 }) => {
   const [view, setView] = useState<'month' | 'week' | 'today'>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showGenerateOptions, setShowGenerateOptions] = useState(false);
-  const [showSuccessSummary, setShowSuccessSummary] = useState(false);
   const [summaryData, setSummaryData] = useState<{ recipe: Recipe; type: MealType; plan: PlannedMeal } | null>(null);
   const [macroPopupData, setMacroPopupData] = useState<{ date: string; plan: PlannedMeal } | null>(null);
   const [showPrepPortal, setShowPrepPortal] = useState(false);
@@ -295,7 +230,7 @@ const PlannerView: React.FC<PlannerViewProps> = ({
   const [selectedDrinkId, setSelectedDrinkId] = useState<string>(defaultDrink?.id || '');
   const [drinksPerPerson, setDrinksPerPerson] = useState(settings.defaultDrinksPerPersonPerDay || 2);
 
-  const MEAL_ORDER: MealType[] = ['breakfast', 'snack', 'dinner', 'lunch'];
+  const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'snack', 'dinner'];
 
   const totalSlotsPerWeek = useMemo(() => {
       const counts = { breakfast: 0, lunch: 0, dinner: 0, snack: 0 };
@@ -358,8 +293,6 @@ const PlannerView: React.FC<PlannerViewProps> = ({
           {recipe.name}
         </div>
         <div className="flex items-center space-x-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button onClick={() => onSwapPlannedMeal(dateString, mealType)} className="p-0.5 text-blue-600 hover:bg-blue-100 rounded" title="Swap"><MagicWandIcon className="w-3 h-3"/></button>
-            <button onClick={() => onRemovePlannedMeal(dateString, mealType)} className="p-0.5 text-red-600 hover:bg-red-100 rounded" title="Remove"><TrashIcon className="w-3 h-3"/></button>
             <label className="flex items-center cursor-pointer ml-0.5">
                 <input type="checkbox" checked={isEaten} onChange={(e) => onMarkAsEaten(dateString, mealType, e.target.checked)} className="hidden" />
                 <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center ${isEaten ? 'bg-green-500 border-green-500' : 'bg-white border-gray-400'}`}>
@@ -397,6 +330,13 @@ const PlannerView: React.FC<PlannerViewProps> = ({
                         className="w-full py-2 bg-purple-50 text-purple-700 rounded-lg text-[9px] font-black uppercase flex items-center justify-center gap-1 border border-purple-100 hover:bg-purple-100 transition-all shadow-sm"
                     >
                         <MagicWandIcon className="w-2.5 h-2.5" /> Prep
+                    </button>
+                    <button 
+                        onClick={() => onClearPlan?.()}
+                        className="w-full py-2 bg-red-50 text-red-700 rounded-lg text-[9px] font-black uppercase flex items-center justify-center gap-1 border border-red-100 hover:bg-red-100 transition-all shadow-sm"
+                        title="Clear current plan and shopping list"
+                    >
+                        <TrashIcon className="w-2.5 h-2.5" /> Clear
                     </button>
                 </div>
             )}
@@ -436,34 +376,27 @@ const PlannerView: React.FC<PlannerViewProps> = ({
             </h3>
         </div>
 
-        {plannedDay?.isMealPrepDay && hasShoppingItems && (
-            <div 
-                onClick={() => setActiveTab({id: 'shopping', label: 'Shopping List'})}
-                className="bg-green-600 text-white p-4 rounded-xl shadow-lg flex items-center justify-between cursor-pointer hover:bg-green-700 transition-all transform active:scale-95"
-            >
-                <div className="flex items-center gap-3">
-                    <ShoppingCartIcon className="w-6 h-6" />
-                    <div>
-                        <p className="font-black text-sm uppercase tracking-wider">Plan Generated - Shopping List Ready</p>
-                        <p className="text-xs opacity-80">Click to view your grocery list for the new cycle</p>
-                    </div>
-                </div>
-                <div className="bg-white/20 px-4 py-2 rounded-lg font-bold text-sm">OPEN LIST</div>
-            </div>
-        )}
-
         {plannedDay?.isMealPrepDay && (
             <div className="flex flex-col gap-3">
                 <div className="bg-purple-600 border border-purple-700 p-4 rounded-xl text-center font-bold text-white shadow-lg animate-pulse">
                     🍴 MEAL PREP DAY: Get your weekly batch cooking done today!
                 </div>
-                <button 
-                    onClick={() => setShowPrepPortal(true)}
-                    className="w-full py-4 bg-white border-2 border-purple-600 text-purple-600 rounded-xl font-black shadow hover:bg-purple-50 transition-all flex items-center justify-center gap-2"
-                >
-                    <MagicWandIcon className="w-5 h-5" />
-                    START BATCH PREP MODE
-                </button>
+                <div className="grid grid-cols-2 gap-3">
+                    <button 
+                        onClick={() => setShowPrepPortal(true)}
+                        className="w-full py-4 bg-white border-2 border-purple-600 text-purple-600 rounded-xl font-black shadow hover:bg-purple-50 transition-all flex items-center justify-center gap-2"
+                    >
+                        <MagicWandIcon className="w-5 h-5" />
+                        PREP MODE
+                    </button>
+                    <button 
+                        onClick={() => onClearPlan?.()}
+                        className="w-full py-4 bg-white border-2 border-red-600 text-red-600 rounded-xl font-black shadow hover:bg-red-50 transition-all flex items-center justify-center gap-2"
+                    >
+                        <TrashIcon className="w-5 h-5" />
+                        CLEAR PLAN
+                    </button>
+                </div>
             </div>
         )}
 
@@ -506,10 +439,6 @@ const PlannerView: React.FC<PlannerViewProps> = ({
                             </div>
                         </div>
                         <div className="flex flex-col items-end gap-2 ml-4">
-                            <div className="flex items-center gap-1">
-                                <button onClick={() => onSwapPlannedMeal(dayStr, mealType as MealType)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-xl" title="Swap Recipe"><MagicWandIcon className="w-5 h-5"/></button>
-                                <button onClick={() => onRemovePlannedMeal(dayStr, mealType as MealType)} className="p-2 text-red-600 hover:bg-red-50 rounded-xl" title="Remove"><TrashIcon className="w-5 h-5"/></button>
-                            </div>
                             <label className="flex items-center cursor-pointer bg-gray-50 px-4 py-2 rounded-xl border border-gray-100 hover:border-green-300 transition-all">
                                 <span className="text-[10px] font-black mr-2 text-gray-600 uppercase tracking-tighter">EATEN?</span>
                                 <input type="checkbox" checked={isEaten} onChange={(e) => onMarkAsEaten(dayStr, mealType as MealType, e.target.checked)} className="hidden" />
@@ -528,6 +457,12 @@ const PlannerView: React.FC<PlannerViewProps> = ({
                     </div>
                 )
                 })}
+                <button 
+                    onClick={() => setMacroPopupData({ date: dayStr, plan: plannedDay })}
+                    className="w-full bg-gray-900 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg hover:bg-black transition-all active:scale-95"
+                >
+                    View Daily Macro Totals
+                </button>
             </>
         ) : !plannedDay ? (
             <div className="text-center py-20 bg-white rounded-2xl border-2 border-dashed border-gray-200">
@@ -575,8 +510,8 @@ const PlannerView: React.FC<PlannerViewProps> = ({
               <div className="bg-white rounded-2xl shadow-2xl p-8 border border-blue-100 max-w-sm w-full animate-fade-in text-center space-y-6">
                   <LoadingIcon className="w-12 h-12 text-blue-600 mx-auto" />
                   <div>
-                    <h3 className="text-lg font-black text-gray-800 uppercase tracking-tight">AI Chef is working...</h3>
-                    <p className="text-xs font-medium text-gray-500 mt-2">Optimizing meal sequence for your library.</p>
+                    <h3 className="text-lg font-black text-gray-800 uppercase tracking-tight">AI Chef at Work</h3>
+                    <p className="text-xs font-medium text-gray-500 mt-2">Balancing recipes and calorie goals...</p>
                   </div>
                   <GenerationProgressIndicator percentage={generationProgress} status={generationStatus} />
               </div>
@@ -618,15 +553,8 @@ const PlannerView: React.FC<PlannerViewProps> = ({
           <PrepModePortal 
             mealPlan={mealPlan} 
             settings={settings} 
+            setActiveTab={setActiveTab}
             onClose={() => setShowPrepPortal(false)} 
-          />
-      )}
-
-      {showSuccessSummary && mealPlan.size > 0 && (
-          <PlanSuccessModal 
-            mealPlan={mealPlan} 
-            onClose={() => setShowSuccessSummary(false)} 
-            onGoToShopping={() => { setActiveTab({id: 'shopping', label: 'Shopping List'}); setShowSuccessSummary(false); }}
           />
       )}
 

@@ -1,11 +1,12 @@
 
 import React, { useState, useCallback, useRef } from 'react';
-import { Recipe, RecipeCategory, RecipeTag, GeneratedRecipeData, BulkParsedRecipe } from '../types';
+import { Recipe, RecipeCategory, RecipeTag, GeneratedRecipeData, BulkParsedRecipe, Settings } from '../types';
 import RecipeListView from './RecipeListView';
 import ImportRecipeModal from './ImportRecipeModal';
 import GenerateRecipeModal from './GenerateRecipeModal';
 import BulkImportModal from './BulkImportModal';
-import { PlusIcon, UploadIcon, ExportIcon, MagicWandIcon } from './Icons';
+import TrashBinModal from './TrashBinModal';
+import { PlusIcon, UploadIcon, ExportIcon, MagicWandIcon, TrashIcon } from './Icons';
 
 declare global {
   interface Window {
@@ -17,9 +18,14 @@ declare global {
 
 interface MealsViewProps {
   recipes: Recipe[];
+  binRecipes: Recipe[];
+  settings: Settings;
   addRecipe: (recipe: Omit<Recipe, 'id' | 'macros' | 'healthScore' | 'scoreReasoning'>) => Promise<void>;
   updateRecipe: (recipe: Recipe) => Promise<void>;
   deleteRecipe: (recipeId: string) => void;
+  restoreRecipe: (recipeId: string) => void;
+  restoreAllRecipes: () => void;
+  permanentDeleteFromBin: (recipeId: string) => void;
   deleteAllRecipes: () => void;
   isLoading: boolean;
   allTags: Record<RecipeCategory, RecipeTag[]>;
@@ -37,10 +43,10 @@ interface MealsViewProps {
   onSetDefaultDrink?: (id: string) => void;
 }
 
-type ModalType = 'import' | 'generate' | 'bulk' | null;
+type ModalType = 'import' | 'generate' | 'bulk' | 'bin' | null;
 
 const MealsView: React.FC<MealsViewProps> = ({ 
-    recipes, addRecipe, updateRecipe, deleteRecipe, deleteAllRecipes, 
+    recipes, binRecipes, settings, addRecipe, updateRecipe, deleteRecipe, restoreRecipe, restoreAllRecipes, permanentDeleteFromBin, deleteAllRecipes, 
     isLoading, allTags, bulkImportRecipes, onEnterKitchenMode, handleEditRecipe,
     onOpenAddRecipeModal, onDetectSimilar, onSetDefaultDrink
 }) => {
@@ -50,7 +56,6 @@ const MealsView: React.FC<MealsViewProps> = ({
     const devClickTimeout = useRef<number | null>(null);
     
     const handleDeleteRecipe = (recipeId: string) => {
-        // Removed redundant window.confirm since RecipeCard has its own confirmation UI
         deleteRecipe(recipeId);
     };
 
@@ -184,6 +189,15 @@ const MealsView: React.FC<MealsViewProps> = ({
         <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
             <h2 onClick={handleDevTitleClick} className="text-2xl font-bold text-gray-700 cursor-pointer" title="Developer options available...">My Recipes ({recipes.filter(r => !r.baseRecipeId).length})</h2>
             <div className="flex flex-wrap items-center justify-center gap-2">
+                 <button onClick={() => setActiveModal('bin')} className="flex items-center bg-gray-100 text-gray-600 px-4 py-2 rounded-lg shadow-sm hover:bg-gray-200 transition-colors relative">
+                    <TrashIcon className="w-4 h-4" />
+                    <span className="ml-2 text-sm">Bin</span>
+                    {binRecipes.length > 0 && (
+                        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full animate-pulse">
+                            {binRecipes.length}
+                        </span>
+                    )}
+                </button>
                  <button onClick={onDetectSimilar} disabled={isLoading || recipes.length < 2} className="flex items-center bg-purple-600 text-white px-4 py-2 rounded-lg shadow hover:bg-purple-700 disabled:bg-purple-300 transition-colors">
                     <MagicWandIcon className="w-4 h-4" />
                     <span className="ml-2 text-sm">Detect Duplicates</span>
@@ -205,6 +219,7 @@ const MealsView: React.FC<MealsViewProps> = ({
         
         <RecipeListView 
             recipes={recipes}
+            settings={settings}
             onSelectRecipe={onEnterKitchenMode}
             onAiEditRecipe={handleEditRecipe}
             onDeleteRecipe={handleDeleteRecipe}
@@ -217,6 +232,7 @@ const MealsView: React.FC<MealsViewProps> = ({
                 onClose={closeModal}
                 onRecipeGenerated={handleRecipeGenerated}
                 allTags={allTags}
+                settings={settings}
             />
         )}
 
@@ -224,6 +240,16 @@ const MealsView: React.FC<MealsViewProps> = ({
             <BulkImportModal 
                 onClose={closeModal}
                 onBulkImport={bulkImportRecipes}
+            />
+        )}
+
+        {activeModal === 'bin' && (
+            <TrashBinModal 
+                binRecipes={binRecipes}
+                onClose={closeModal}
+                onRestore={restoreRecipe}
+                onRestoreAll={restoreAllRecipes}
+                onPermanentDelete={permanentDeleteFromBin}
             />
         )}
     </div>

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Recipe, RecipeCategory, GeneratedRecipeData, Settings, BulkParsedRecipe, RecipeTag, UsageIntensity } from '../types';
-import { LoadingIcon, XIcon, MagicWandIcon } from './Icons';
+import { LoadingIcon, XIcon, MagicWandIcon, WarningIcon } from './Icons';
 import { editRecipeWithGemini } from '../services/geminiService';
 
 interface AddRecipeModalProps {
@@ -78,9 +78,15 @@ const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
     }
   }, [category]);
 
+  const checkBannedItems = () => {
+    if (!settings.blacklistedIngredients?.length) return [];
+    const text = `${name} ${ingredients}`.toLowerCase();
+    return settings.blacklistedIngredients.filter(ing => text.includes(ing.toLowerCase()));
+  };
+
   const handleAiGenerate = async (promptOverride?: string) => {
       const currentPrompt = promptOverride || aiPrompt;
-      if (!currentPrompt) { alert("Please enter your desired changes in the AI Assistant prompt box."); return; }
+      if (!currentPrompt && !isPrefillMode) { alert("Please enter your desired changes in the AI Assistant prompt box."); return; }
       setIsGenerating(true);
       try {
           const recipeForAi = (isEditMode ? {
@@ -88,7 +94,8 @@ const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
           } : { 
               id: 'temp', name, description, category, ingredients, instructions, isAlsoBreakfast, isAlsoSnack, usageIntensity, servings: 1, macros, healthScore, scoreReasoning
           }) as Recipe;
-          const result = await editRecipeWithGemini(recipeForAi, currentPrompt, settings.blacklistedIngredients);
+          // Fix: Expected 3 arguments, but got 4. Removed minimalIngredients.
+          const result = await editRecipeWithGemini(recipeForAi, currentPrompt || "Ensure macros are correct and ingredients reflect family size/goals.", settings.blacklistedIngredients);
           setName(result.name);
           setDescription(result.description || '');
           setIngredients(result.ingredients);
@@ -108,6 +115,14 @@ const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !ingredients || !instructions) { alert("Please fill in all fields."); return; }
+    
+    // Check for banned items
+    const banned = checkBannedItems();
+    if (banned.length > 0) {
+        const confirmed = window.confirm(`WARNING: This recipe contains banned ingredients: ${banned.join(', ')}. Do you want to save it anyway?`);
+        if (!confirmed) return;
+    }
+
     const data = { 
         name, 
         description, 

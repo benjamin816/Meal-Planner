@@ -1,7 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { MealPlan, Recipe, Settings, PrepWorkflow, PrepWorkflowStep, MealType, PlannedMeal } from '../types';
-// Add missing ShoppingCartIcon to imports
+import { MealPlan, Recipe, Settings, PrepWorkflow, PrepWorkflowStep, MealType, PlannedMeal, Tab } from '../types';
 import { XIcon, CheckIcon, LoadingIcon, MagicWandIcon, ChevronRightIcon, ChevronLeftIcon, ShoppingCartIcon } from './Icons';
 import { generatePrepWorkflowWithGemini } from '../services/geminiService';
 
@@ -9,6 +8,7 @@ interface PrepModePortalProps {
     mealPlan: MealPlan;
     settings: Settings;
     onClose: () => void;
+    setActiveTab: (tab: Tab) => void;
 }
 
 const Timer: React.FC<{ minutes: number }> = ({ minutes }) => {
@@ -42,7 +42,7 @@ const Timer: React.FC<{ minutes: number }> = ({ minutes }) => {
     );
 };
 
-const PrepModePortal: React.FC<PrepModePortalProps> = ({ mealPlan, settings, onClose }) => {
+const PrepModePortal: React.FC<PrepModePortalProps> = ({ mealPlan, settings, onClose, setActiveTab }) => {
     const [step, setStep] = useState<'selection' | 'generating' | 'execution'>('selection');
     const [selectedRecipeIds, setSelectedRecipeIds] = useState<Set<string>>(new Set());
     const [workflow, setWorkflow] = useState<PrepWorkflow | null>(null);

@@ -1,14 +1,16 @@
 
-import React from 'react';
-import { Recipe, UsageIntensity, RecipeCategory } from '../types';
-import { StarIcon, MagicWandIcon, TrashIcon } from './Icons';
+import React, { useMemo } from 'react';
+import { Recipe, UsageIntensity, RecipeCategory, Settings } from '../types';
+import { StarIcon, MagicWandIcon, TrashIcon, WarningIcon } from './Icons';
 
 interface RecipeCardProps {
   recipe: Recipe;
+  settings: Settings;
   onSelect: (recipe: Recipe) => void;
   onAiEdit: (recipe: Recipe) => void;
   onDelete: (recipeId: string) => void;
   onSetDefaultDrink?: (id: string) => void;
+  showDelete?: boolean;
 }
 
 const IntensityIndicator = ({ intensity }: { intensity: UsageIntensity }) => {
@@ -76,23 +78,31 @@ const HealthScoreCircle = ({ score }: { score: number }) => {
     );
 };
 
-const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onSelect, onAiEdit, onDelete, onSetDefaultDrink }) => {
+const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, settings, onSelect, onAiEdit, onDelete, onSetDefaultDrink, showDelete }) => {
   const isDrink = recipe.category === RecipeCategory.Drink;
   const macros = recipe.macros || { calories: 0, protein: 0, carbs: 0, fat: 0 };
 
-  const handleDelete = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onDelete(recipe.id);
-  };
+  const bannedFound = useMemo(() => {
+    if (!settings.blacklistedIngredients?.length) return [];
+    const text = `${recipe.name} ${recipe.ingredients}`.toLowerCase();
+    return settings.blacklistedIngredients.filter(ing => text.includes(ing.toLowerCase()));
+  }, [recipe, settings.blacklistedIngredients]);
 
   return (
-    <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden flex flex-col h-full hover:shadow-lg transition-shadow duration-200 fade-in">
+    <div className={`bg-white rounded-lg shadow-md border ${bannedFound.length > 0 ? 'border-red-300 ring-1 ring-red-50' : 'border-gray-200'} overflow-hidden flex flex-col h-full hover:shadow-lg transition-shadow duration-200 fade-in`}>
       <div className="p-4 flex-grow cursor-pointer" onClick={() => onSelect(recipe)}>
         <div className="flex justify-between items-start mb-2">
             <div className="flex-grow pr-2">
                 <h3 className="text-lg font-bold text-gray-800">{recipe.name}</h3>
                 {recipe.variationName && <p className="text-xs text-purple-600 font-semibold">{recipe.variationName}</p>}
                 {recipe.description && <p className="text-xs text-gray-400 mt-1 line-clamp-2">{recipe.description}</p>}
+                
+                {bannedFound.length > 0 && (
+                    <div className="mt-2 flex items-center gap-1.5 text-red-600 bg-red-50 px-2 py-1 rounded-md border border-red-100 animate-pulse">
+                        <WarningIcon className="w-3.5 h-3.5 shrink-0" />
+                        <span className="text-[9px] font-black uppercase tracking-tighter">Banned Item Found: {bannedFound[0]}</span>
+                    </div>
+                )}
             </div>
             <div className="flex items-center shrink-0 space-x-3">
                 <div title={`Health Score: ${recipe.healthScore.toFixed(1)}/10. ${recipe.scoreReasoning}`}>
@@ -142,7 +152,17 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onSelect, onAiEdit, onD
         </div>
         <div className="flex space-x-2">
             <button onClick={(e) => { e.stopPropagation(); onAiEdit(recipe); }} className="text-sm text-purple-600 hover:text-purple-800 font-semibold inline-flex items-center"><MagicWandIcon className="h-4 w-4 mr-1"/> AI Edit</button>
-            <button onClick={handleDelete} className="text-sm text-red-600 hover:text-red-800 font-semibold inline-flex items-center"><TrashIcon className="h-4 w-4 mr-1"/> Delete</button>
+            {showDelete && (
+                <button 
+                    onClick={(e) => { 
+                        e.stopPropagation(); 
+                        onDelete(recipe.id); 
+                    }} 
+                    className="text-red-500 hover:text-red-700 p-1 rounded-md transition-colors"
+                >
+                    <TrashIcon className="h-4 w-4"/>
+                </button>
+            )}
         </div>
       </div>
     </div>

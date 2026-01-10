@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { NutritionGoals } from '../types';
 import { suggestNutritionGoalsWithGemini } from '../services/geminiService';
@@ -11,8 +12,9 @@ interface AutoSuggestGoalsModalProps {
 const AutoSuggestGoalsModal: React.FC<AutoSuggestGoalsModalProps> = ({ onClose, onGoalsSuggested }) => {
     const [gender, setGender] = useState<'male' | 'female'>('female');
     const [age, setAge] = useState(30);
-    const [height, setHeight] = useState(165);
-    const [weight, setWeight] = useState(60);
+    const [heightFt, setHeightFt] = useState(5);
+    const [heightIn, setHeightIn] = useState(5);
+    const [weightLb, setWeightLb] = useState(140);
     const [activityLevel, setActivityLevel] = useState<'sedentary' | 'light' | 'moderate' | 'active' | 'very_active'>('light');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -22,7 +24,7 @@ const AutoSuggestGoalsModal: React.FC<AutoSuggestGoalsModalProps> = ({ onClose, 
         setIsLoading(true);
         setError(null);
         try {
-            const goals = await suggestNutritionGoalsWithGemini(gender, age, height, weight, activityLevel);
+            const goals = await suggestNutritionGoalsWithGemini(gender, age, heightFt, heightIn, weightLb, activityLevel);
             onGoalsSuggested(goals);
         } catch (err) {
             setError("Could not get a suggestion from the AI. Please try again.");
@@ -55,13 +57,22 @@ const AutoSuggestGoalsModal: React.FC<AutoSuggestGoalsModalProps> = ({ onClose, 
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Age</label>
                                 <input type="number" value={age} onChange={e => setAge(parseInt(e.target.value))} className="w-full border-gray-300 rounded-md shadow-sm" />
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Height (cm)</label>
-                                <input type="number" value={height} onChange={e => setHeight(parseInt(e.target.value))} className="w-full border-gray-300 rounded-md shadow-sm" />
+                            <div className="col-span-2 sm:col-span-1">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Height</label>
+                                <div className="flex gap-2">
+                                    <div className="relative flex-1">
+                                        <input type="number" value={heightFt} onChange={e => setHeightFt(parseInt(e.target.value))} className="w-full border-gray-300 rounded-md shadow-sm pr-8" />
+                                        <span className="absolute right-2 top-2 text-xs text-gray-400">ft</span>
+                                    </div>
+                                    <div className="relative flex-1">
+                                        <input type="number" value={heightIn} onChange={e => setHeightIn(parseInt(e.target.value))} className="w-full border-gray-300 rounded-md shadow-sm pr-8" />
+                                        <span className="absolute right-2 top-2 text-xs text-gray-400">in</span>
+                                    </div>
+                                </div>
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Weight (kg)</label>
-                                <input type="number" value={weight} onChange={e => setWeight(parseInt(e.target.value))} className="w-full border-gray-300 rounded-md shadow-sm" />
+                            <div className="col-span-2 sm:col-span-1">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Weight (lb)</label>
+                                <input type="number" value={weightLb} onChange={e => setWeightLb(parseInt(e.target.value))} className="w-full border-gray-300 rounded-md shadow-sm" />
                             </div>
                         </div>
                         <div>
@@ -74,12 +85,12 @@ const AutoSuggestGoalsModal: React.FC<AutoSuggestGoalsModalProps> = ({ onClose, 
                                 <option value="very_active">Very Active (hard exercise & physical job)</option>
                             </select>
                         </div>
-                        {error && <p className="text-sm text-red-600">{error}</p>}
+                        {error && <p className="text-sm text-red-600 font-bold">{error}</p>}
                     </div>
                     <div className="p-5 border-t border-gray-200 bg-gray-50 flex justify-end space-x-3">
                         <button type="button" onClick={onClose} className="px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
                         <button type="submit" disabled={isLoading} className="px-4 py-2 bg-purple-600 text-white rounded-md text-sm font-medium hover:bg-purple-700 disabled:bg-purple-300 flex items-center">
-                            {isLoading ? <LoadingIcon /> : <MagicWandIcon />}
+                            {isLoading ? <LoadingIcon className="w-4 h-4 mr-2" /> : <MagicWandIcon className="w-4 h-4 mr-2" />}
                             <span className="ml-2">{isLoading ? 'Calculating...' : 'Suggest Goals'}</span>
                         </button>
                     </div>

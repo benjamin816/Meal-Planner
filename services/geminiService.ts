@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { Recipe, RecipeCategory, NutritionGoals, GeneratedRecipeData, Settings, MealPlan, PlannedMeal, MealType, BulkParsedRecipe, UsageIntensity, SimilarityGroup, PrepWorkflow } from "../types";
 
@@ -6,9 +7,6 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 const PRO_MODEL = 'gemini-3-pro-preview';
 const FLASH_MODEL = 'gemini-3-flash-preview';
 
-/**
- * Helper to wrap API calls with exponential backoff for 429 errors
- */
 async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, initialDelay = 2000): Promise<T> {
     let retries = 0;
     while (true) {
@@ -29,9 +27,6 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, initialDelay =
     }
 }
 
-/**
- * Robustly parses JSON from LLM output, handling markdown blocks or raw strings.
- */
 const parseJsonGracefully = <T>(jsonString: string | undefined): T | null => {
     if (!jsonString) return null;
     try {
@@ -40,11 +35,7 @@ const parseJsonGracefully = <T>(jsonString: string | undefined): T | null => {
         if (match) {
             sanitized = match[1].trim();
         }
-        
-        sanitized = sanitized.replace(/(\d+\.\d{8,})/g, (m) => {
-            return parseFloat(m).toFixed(4);
-        });
-
+        sanitized = sanitized.replace(/(\d+\.\d{8,})/g, (m) => parseFloat(m).toFixed(4));
         return JSON.parse(sanitized);
     } catch (error) {
         console.error("Failed to parse AI JSON response:", jsonString);
@@ -61,7 +52,6 @@ const fileToGenerativePart = async (file: File) => {
   return { inlineData: { data: await base64EncodedDataPromise, mimeType: file.type } };
 };
 
-// Fix: Added ReconciliationResult interface for ingredient blacklist reconciliation
 export interface ReconciliationResult {
     originalId: string;
     updatedRecipe: Partial<Recipe>;
@@ -69,12 +59,17 @@ export interface ReconciliationResult {
 }
 
 export const analyzeRecipeWithGemini = async (
-    recipe: Omit<Recipe, 'id' | 'macros' | 'healthScore' | 'scoreReasoning'>
+    recipe: Omit<Recipe, 'id' | 'macros' | 'healthScore' | 'scoreReasoning'>,
+    settings?: Settings
 ): Promise<Pick<Recipe, 'description' | 'macros' | 'healthScore' | 'scoreReasoning' | 'servings' | 'usageIntensity'>> => {
+    const blacklistInfo = settings?.blacklistedIngredients?.length ? `CRITICAL: STRICTLY AVOID THESE INGREDIENTS: ${settings.blacklistedIngredients.join(', ')}.` : '';
+    const minimalInfo = settings?.minimalIngredients?.length ? `USE THESE MINIMALLY: ${settings.minimalIngredients.join(', ')}.` : '';
+    
     const prompt = `
         Analyze this recipe. Return nutritional info, health score (1-10), reasoning, and usageIntensity (light, normal, heavy).
         CRITICAL: All quantities must represent exactly ONE (1) serving.
-        If specific brands like 'Quest' are mentioned, provide estimated generic nutritional data for those items.
+        ${blacklistInfo} 
+        ${minimalInfo}
         
         Recipe: ${recipe.name}
         Ingredients: ${recipe.ingredients}
@@ -111,21 +106,17 @@ export const analyzeRecipeWithGemini = async (
     }));
 
     const result = parseJsonGracefully<any>(response.text);
-    if (!result) throw new Error("AI analysis failed or returned invalid data.");
-    
-    if (!['light', 'normal', 'heavy'].includes(result.usageIntensity)) {
-        result.usageIntensity = 'normal';
-    }
-    
+    if (!result) throw new Error("AI analysis failed.");
     return result;
 };
 
 export const generateShoppingListWithGemini = async (allIngredients: string): Promise<{ category: string; items: string[] }[]> => {
     const prompt = `
-        Create a categorized supermarket shopping list from these ingredients.
-        Combine duplicates and group by category (e.g., Produce, Meat).
+        Create a categorized supermarket shopping list.
+        IMPORTANT: Include specific measurements and quantities for EVERY item (e.g., "5 lbs Chicken Breast", "2 cartons Almond Milk", "1/2 cup Olive Oil").
+        Combine duplicates by summing their quantities.
         
-        Ingredients:
+        Ingredients List:
         ${allIngredients}
     `;
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
@@ -167,10 +158,8 @@ export const categorizeShoppingItemWithGemini = async (itemName: string): Promis
     return result?.category || "Other";
 };
 
-export const parseRecipeFromTextWithGemini = async (text: string): Promise<GeneratedRecipeData> => {
-    const prompt = `Extract recipe details. CRITICAL: Scale ingredients to ONE (1) serving.
-    ${text.substring(0, 10000)}`;
-    
+export const parseRecipeFromTextWithGemini = async (text: string, settings?: Settings): Promise<GeneratedRecipeData> => {
+    const prompt = `Extract recipe details. CRITICAL: Scale ingredients to ONE (1) serving. ${text.substring(0, 10000)}`;
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: PRO_MODEL,
         contents: prompt,
@@ -192,14 +181,19 @@ export const parseRecipeFromTextWithGemini = async (text: string): Promise<Gener
         }
     }));
     const result = parseJsonGracefully<GeneratedRecipeData>(response.text);
-    if (!result) throw new Error("Could not parse recipe from text.");
+    if (!result) throw new Error("Could not parse recipe.");
     return result;
 };
 
 export const suggestNutritionGoalsWithGemini = async (
-    gender: 'male' | 'female', age: number, height: number, weight: number, activityLevel: string
+    gender: 'male' | 'female', 
+    age: number, 
+    heightFt: number, 
+    heightIn: number, 
+    weightLb: number, 
+    activityLevel: string
 ): Promise<NutritionGoals> => {
-    const prompt = `Suggest daily calories and macro percentages for: ${gender}, ${age}y, ${height}cm, ${weight}kg, Activity: ${activityLevel}.`;
+    const prompt = `Suggest daily calories and macro split percentages for: ${gender}, ${age}y, ${heightFt}ft ${heightIn}in, ${weightLb}lbs, Activity: ${activityLevel}. Macros must be percentages (0-100) summing to 100.`;
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: FLASH_MODEL,
         contents: prompt,
@@ -225,8 +219,7 @@ export const suggestNutritionGoalsWithGemini = async (
 export const generateRecipeFromIdeaWithGemini = async (
     idea: string, category: RecipeCategory, blacklistedIngredients: string[]
 ): Promise<GeneratedRecipeData> => {
-    const blacklist = blacklistedIngredients.length > 0 ? `Avoid: ${blacklistedIngredients.join(', ')}.` : '';
-    const prompt = `Create a healthy recipe for "${idea}" in "${category}". Scale for ONE (1) serving. ${blacklist}`;
+    const prompt = `Create a healthy recipe for "${idea}" in "${category}". Scale for ONE (1) serving. Avoid: ${blacklistedIngredients.join(', ')}`;
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: PRO_MODEL,
         contents: prompt,
@@ -281,11 +274,12 @@ const bulkRecipeItemSchema = {
 export const bulkParseRecipesFromFileWithGemini = async (
     file: File, 
     blacklistedIngredients: string[],
+    minimalIngredients: string[],
     targetServings: number,
     nutritionGoals: NutritionGoals
 ): Promise<BulkParsedRecipe[]> => {
     const filePart = await fileToGenerativePart(file);
-    const prompt = `Extract all recipes from file. Scale to ONE (1) serving. Goals: ${JSON.stringify(nutritionGoals)}.`;
+    const prompt = `Extract all recipes. Scale to ONE (1) serving. Avoid: ${blacklistedIngredients.join(', ')}. Goals: ${JSON.stringify(nutritionGoals)}`;
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: PRO_MODEL,
         contents: { parts: [ { text: prompt }, filePart ] },
@@ -301,10 +295,11 @@ export const bulkGenerateAndAnalyzeRecipesWithGemini = async (
     ideas: string[], 
     category: RecipeCategory, 
     blacklistedIngredients: string[],
+    minimalIngredients: string[],
     targetServings: number,
     nutritionGoals: NutritionGoals
 ): Promise<BulkParsedRecipe[]> => {
-    const prompt = `Generate healthy recipes for: ${ideas.join(', ')}. Scale to ONE (1) serving.`;
+    const prompt = `Generate healthy recipes for: ${ideas.join(', ')}. Scale to ONE (1) serving. Avoid: ${blacklistedIngredients.join(', ')}`;
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: PRO_MODEL,
         contents: prompt,
@@ -321,7 +316,7 @@ export const editRecipeWithGemini = async (
     editRequest: string,
     blacklistedIngredients: string[]
 ): Promise<BulkParsedRecipe> => {
-    const prompt = `Edit recipe: ${originalRecipe.name}. Request: "${editRequest}". Maintain ONE (1) serving portions.`;
+    const prompt = `Edit recipe: ${originalRecipe.name}. Request: "${editRequest}". Maintain ONE (1) serving portions. Avoid: ${blacklistedIngredients.join(', ')}`;
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: PRO_MODEL,
         contents: prompt,
@@ -335,10 +330,6 @@ export const editRecipeWithGemini = async (
     return result;
 };
 
-// Fix: Implemented reconcileRecipesWithBlacklist function to handle automatic ingredient substitution
-/**
- * Scans a list of recipes for a blacklisted ingredient and uses Gemini to remove/substitute it.
- */
 export const reconcileRecipesWithBlacklist = async (
     recipes: Recipe[],
     blacklistIngredient: string
@@ -347,19 +338,8 @@ export const reconcileRecipesWithBlacklist = async (
         r.ingredients.toLowerCase().includes(blacklistIngredient.toLowerCase()) ||
         r.name.toLowerCase().includes(blacklistIngredient.toLowerCase())
     );
-
     if (relevantRecipes.length === 0) return [];
-
-    const prompt = `
-        The ingredient "${blacklistIngredient}" is now blacklisted. 
-        For each of the following recipes, remove or substitute this ingredient.
-        Update the ingredients list and instructions. Recalculate macros and health score.
-        All portions must remain scaled for exactly ONE (1) serving.
-        
-        Recipes to reconcile:
-        ${JSON.stringify(relevantRecipes.map(r => ({ id: r.id, name: r.name, ingredients: r.ingredients, instructions: r.instructions, macros: r.macros })))}
-    `;
-
+    const prompt = `The ingredient "${blacklistIngredient}" is now blacklisted. Substitute it in these recipes. ${JSON.stringify(relevantRecipes)}`;
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: PRO_MODEL,
         contents: prompt,
@@ -371,26 +351,7 @@ export const reconcileRecipesWithBlacklist = async (
                     type: Type.OBJECT,
                     properties: {
                         originalId: { type: Type.STRING },
-                        updatedRecipe: {
-                            type: Type.OBJECT,
-                            properties: {
-                                name: { type: Type.STRING },
-                                ingredients: { type: Type.STRING },
-                                instructions: { type: Type.STRING },
-                                macros: {
-                                    type: Type.OBJECT,
-                                    properties: {
-                                        calories: { type: Type.NUMBER },
-                                        protein: { type: Type.NUMBER },
-                                        carbs: { type: Type.NUMBER },
-                                        fat: { type: Type.NUMBER }
-                                    },
-                                    required: ["calories", "protein", "carbs", "fat"]
-                                },
-                                healthScore: { type: Type.NUMBER }
-                            },
-                            required: ["ingredients", "instructions", "macros", "healthScore"]
-                        },
+                        updatedRecipe: { type: Type.OBJECT, properties: { name: { type: Type.STRING }, ingredients: { type: Type.STRING }, instructions: { type: Type.STRING }, macros: { type: Type.OBJECT, properties: { calories: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, fat: { type: Type.NUMBER } } }, healthScore: { type: Type.NUMBER } } },
                         changesSummary: { type: Type.STRING }
                     },
                     required: ["originalId", "updatedRecipe", "changesSummary"]
@@ -398,13 +359,12 @@ export const reconcileRecipesWithBlacklist = async (
             }
         }
     }));
-
     return parseJsonGracefully<ReconciliationResult[]>(response.text) || [];
 };
 
 export const findSimilarRecipesWithGemini = async (recipes: Recipe[]): Promise<SimilarityGroup[]> => {
     if (recipes.length < 2) return [];
-    const prompt = `Identify duplicate or very similar recipes in this list.`;
+    const prompt = `Identify duplicate recipes.`;
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: PRO_MODEL,
         contents: prompt,
@@ -430,24 +390,50 @@ export const findSimilarRecipesWithGemini = async (recipes: Recipe[]): Promise<S
 export const generateMealPlanWithGemini = async (settings: Settings, recipes: Recipe[], startDate: string, drinkRecipe?: Recipe, drinkQtyPerPerson: number = 2): Promise<MealPlan> => {
     const drinkKcal = drinkRecipe ? drinkRecipe.macros.calories * drinkQtyPerPerson : 0;
     
-    const peopleGoals = settings.people.map(p => ({
-        name: p.name,
-        dailyTarget: p.goals.calories - (settings.fudgeRoom || 0) - drinkKcal,
-        macros: p.goals
-    }));
+    const startObj = new Date(startDate);
+    const prepObj = new Date(startObj);
+    prepObj.setDate(startObj.getDate() - 1);
+    const prepDate = prepObj.toISOString().split('T')[0];
+
+    const peopleGoals = settings.people.map(p => {
+        const floor = p.goals.calories - (settings.fudgeRoom || 0) - drinkKcal;
+        return {
+            name: p.name,
+            floorKcal: Math.max(1200, floor),
+            ceilingKcal: floor * 1.15
+        };
+    });
 
     const prompt = `
-        Generate a balanced meal plan starting ${startDate} for ${settings.planDurationWeeks} weeks.
+        Generate a complete meal plan for ${settings.planDurationWeeks} weeks.
         
-        Targets (Daily): ${JSON.stringify(peopleGoals)}
+        CRITICAL DATE RULES:
+        1. THE FIRST MEAL MUST START ON: ${startDate}
+        2. THE PREP DAY MUST BE: ${prepDate} (Mark as isMealPrepDay: true and leave all meal IDs empty for this specific date).
         
+        STRICT UNIQUE COUNTS (ABSOLUTELY MANDATORY):
+        - You MUST use EXACTLY ${settings.dinnersPerWeek} unique dinner recipes for EACH 7-day period.
+        - You MUST use EXACTLY ${settings.breakfastsPerWeek} unique breakfast recipes for EACH 7-day period.
+        - You MUST use EXACTLY ${settings.snacksPerWeek} unique snack recipes for EACH 7-day period.
+        - DO NOT REPEAT RECIPES MORE THAN NECESSARY TO MEET THESE COUNTS. If a count is 3, pick 3 DIFFERENT IDs from the pool.
+        
+        STRICT CALORIE RULES:
+        1. FOR EVERY DAY (EXCEPT PREP DAY): Total calories per person must be between their specific Floor and Ceiling targets.
+        2. TARGET RANGES (Mandatory): ${JSON.stringify(peopleGoals)}
+        3. PRIORITY: Meeting the total calorie range is the TOP priority.
+        4. DISTRIBUTION: DINNER MUST BE THE LARGEST MEAL OF THE DAY for every day.
+        
+        STRICT RULES FOR VARIETY & LEFTOVERS:
+        1. IF 'useLeftoverForLunch' IS TRUE: Lunch on Day N MUST be exactly the same Recipe ID as Dinner on Day N-1.
+        2. NEVER schedule the same recipe for Lunch and Dinner on the same calendar date.
+        3. MINIMUM GAP: Respect a ${settings.minMealGapDays} day gap before reusing the same recipe ID for a NEW dinner session.
+        
+        RECIPE POOL:
         DINNERS: ${JSON.stringify(recipes.filter(r => r.category === RecipeCategory.Dinner).map(r => ({id: r.id, name: r.name, kcal: r.macros.calories})))}
         BREAKFASTS: ${JSON.stringify(recipes.filter(r => r.category === RecipeCategory.Breakfast || r.isAlsoBreakfast).map(r => ({id: r.id, name: r.name, kcal: r.macros.calories})))}
         SNACKS: ${JSON.stringify(recipes.filter(r => r.category === RecipeCategory.Snack || r.isAlsoSnack).map(r => ({id: r.id, name: r.name, kcal: r.macros.calories})))}
 
-        Daily Meals to fill: ${JSON.stringify(settings.dailyMeals)}
-        
-        Return JSON array: { "date": "YYYY-MM-DD", "breakfastId", "breakfastPortions": [], "lunchId", "lunchPortions": [], "snackId", "snackPortions": [], "dinnerId", "dinnerPortions": [] }
+        Return ONLY a JSON array of objects: { "date": "YYYY-MM-DD", "breakfastId": "r_...", "breakfastPortions": [1.0, 0.8], "lunchId": "...", "lunchPortions": [1.2, 1.0], "dinnerId": "...", "dinnerPortions": [1.5, 1.2], "snackId": "...", "snackPortions": [0.5, 0.5], "isMealPrepDay": false }
     `;
 
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
@@ -471,7 +457,7 @@ export const generateMealPlanWithGemini = async (settings: Settings, recipes: Re
                 snackPortions: day.snackPortions || settings.people.map(() => 1),
                 drink: drinkRecipe,
                 drinkQuantity: drinkQtyPerPerson,
-                isMealPrepDay: false
+                isMealPrepDay: day.isMealPrepDay || false
             });
         });
     }
@@ -479,7 +465,7 @@ export const generateMealPlanWithGemini = async (settings: Settings, recipes: Re
 };
 
 export const generatePrepWorkflowWithGemini = async (selectedItems: { recipe: Recipe; totalServings: number }[]): Promise<PrepWorkflow> => {
-    const prompt = `Create an efficient batch cooking workflow for these items: ${JSON.stringify(selectedItems.map(s => ({n: s.recipe.name, qty: s.totalServings})))}.`;
+    const prompt = `Create a batch cooking workflow for: ${JSON.stringify(selectedItems.map(s => ({n: s.recipe.name, qty: s.totalServings})))}. Group steps logically by action type (prep, cooking, storage).`;
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: PRO_MODEL,
         contents: prompt,
@@ -489,19 +475,7 @@ export const generatePrepWorkflowWithGemini = async (selectedItems: { recipe: Re
                 type: Type.OBJECT,
                 properties: {
                     requiredIngredients: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    steps: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                title: { type: Type.STRING },
-                                description: { type: Type.STRING },
-                                estimatedMinutes: { type: Type.NUMBER },
-                                type: { type: Type.STRING }
-                            },
-                            required: ["title", "description", "estimatedMinutes", "type"]
-                        }
-                    }
+                    steps: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, description: { type: Type.STRING }, estimatedMinutes: { type: Type.NUMBER }, type: { type: Type.STRING } } } }
                 },
                 required: ["requiredIngredients", "steps"]
             }
@@ -513,10 +487,10 @@ export const generatePrepWorkflowWithGemini = async (selectedItems: { recipe: Re
 export const generateShoppingAgentInstructions = async (
     store: string, service: string, dateTime: string, items: string[], userGoals: string, hasAccount: boolean, useThirdParty: boolean
 ): Promise<string> => {
-    const prompt = `Instructions for autonomous agent to buy ${items.length} items at ${store} via ${service} on ${dateTime}.`;
+    const prompt = `Autonomous instructions to buy: ${items.join(', ')} at ${store} via ${service} for ${dateTime}. Account: ${hasAccount}, Third Party: ${useThirdParty}. User Goals: ${userGoals}.`;
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: FLASH_MODEL,
         contents: prompt,
     }));
-    return response.text || "Failed to generate instructions.";
+    return response.text || "Failed.";
 };

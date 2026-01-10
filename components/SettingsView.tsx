@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Settings, Person, NutritionGoals, RecipeCategory, DayOfWeek, DaySettings, RecipeTag, Recipe } from '../types';
-import { SettingsIcon, MagicWandIcon, XIcon, CheckIcon, LoadingIcon, HeartIcon } from './Icons';
+import { SettingsIcon, MagicWandIcon, XIcon, CheckIcon, LoadingIcon, HeartIcon, TrashIcon } from './Icons';
 import AutoSuggestGoalsModal from './AutoSuggestGoalsModal';
 import { reconcileRecipesWithBlacklist, ReconciliationResult } from '../services/geminiService';
 
@@ -11,17 +11,22 @@ interface SettingsViewProps {
     onAllTagsChange: (newAllTags: Record<RecipeCategory, RecipeTag[]>) => void;
     recipes: Recipe[];
     onBulkUpdateRecipes: (updatedRecipes: Recipe[]) => void;
+    onResetApp: () => void;
 }
 
 const DAYS: DayOfWeek[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSettingsChange, allTags, onAllTagsChange, recipes, onBulkUpdateRecipes }) => {
+const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSettingsChange, allTags, onAllTagsChange, recipes, onBulkUpdateRecipes, onResetApp }) => {
     const [localSettings, setLocalSettings] = useState<Settings>(settings);
     const [isAutoSuggestModalOpen, setIsAutoSuggestModalOpen] = useState(false);
     const [editingPersonIndex, setEditingPersonIndex] = useState<number | null>(null);
     const [newBlacklistedIngredient, setNewBlacklistedIngredient] = useState('');
+    const [newMinimalIngredient, setNewMinimalIngredient] = useState('');
     const [isReconciling, setIsReconciling] = useState(false);
     const [reconciliationReport, setReconciliationReport] = useState<ReconciliationResult[] | null>(null);
+    
+    // Reset Confirmation Step (0-3)
+    const [resetStep, setResetStep] = useState(0);
 
     useEffect(() => {
         setLocalSettings(settings);
@@ -69,19 +74,17 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSettingsChange,
         if (ingredientToAdd && !localSettings.blacklistedIngredients.includes(ingredientToAdd)) {
             setIsReconciling(true);
             try {
-                // First, check for impacts
                 const results = await reconcileRecipesWithBlacklist(recipes, ingredientToAdd);
                 
                 if (results.length > 0) {
                     setReconciliationReport(results);
-                    // Update the actual recipe library
                     const updatedRecipeList = recipes.map(r => {
                         const reconciliation = results.find(res => res.originalId === r.id);
                         if (reconciliation) {
                             return {
                                 ...r,
                                 ...reconciliation.updatedRecipe,
-                                id: r.id // Keep original ID
+                                id: r.id
                             } as Recipe;
                         }
                         return r;
@@ -91,7 +94,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSettingsChange,
                     alert(`Ingredient "${ingredientToAdd}" added. No recipes currently in your library use this ingredient.`);
                 }
 
-                // Update settings
                 setLocalSettings(prev => ({
                     ...prev,
                     blacklistedIngredients: [...prev.blacklistedIngredients, ingredientToAdd].sort()
@@ -114,6 +116,24 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSettingsChange,
         setLocalSettings(prev => ({
             ...prev,
             blacklistedIngredients: prev.blacklistedIngredients.filter(i => i !== ingredientToRemove)
+        }));
+    };
+
+    const handleAddMinimalIngredient = () => {
+        const ingredientToAdd = newMinimalIngredient.trim().toLowerCase();
+        if (ingredientToAdd && !localSettings.minimalIngredients.includes(ingredientToAdd)) {
+            setLocalSettings(prev => ({
+                ...prev,
+                minimalIngredients: [...prev.minimalIngredients, ingredientToAdd].sort()
+            }));
+            setNewMinimalIngredient('');
+        }
+    };
+
+    const handleRemoveMinimalIngredient = (ingredientToRemove: string) => {
+        setLocalSettings(prev => ({
+            ...prev,
+            minimalIngredients: prev.minimalIngredients.filter(i => i !== ingredientToRemove)
         }));
     };
 
@@ -143,8 +163,27 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSettingsChange,
         }
     }, [minAllowedMaxUses]);
 
+    const handleResetAppWithConfirmation = () => {
+        if (resetStep < 3) {
+            setResetStep(prev => prev + 1);
+        } else {
+            onResetApp();
+            setResetStep(0);
+        }
+    };
+
+    const getResetButtonText = () => {
+        switch (resetStep) {
+            case 0: return "RESET APP TO DEFAULT";
+            case 1: return "ARE YOU SURE? (1/3)";
+            case 2: return "ARE YOU POSITIVE? (2/3)";
+            case 3: return "FINAL WARNING: WIPE ALL DATA (3/3)";
+            default: return "RESET APP TO DEFAULT";
+        }
+    };
+
     return (
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-4xl mx-auto pb-20">
             <div className="flex items-center mb-6">
                 <SettingsIcon className="text-blue-600 w-8 h-8" />
                 <h2 className="text-2xl font-bold text-gray-700 ml-3">Settings</h2>
@@ -342,59 +381,98 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSettingsChange,
                     </div>
                 </div>
 
-                {/* Avoided Ingredients */}
-                <div className="p-6 bg-gray-50 rounded-xl border border-gray-200 shadow-sm">
-                    <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
-                        <span className="bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2">3</span>
-                        Avoided Ingredients
-                    </h3>
-                     <div className="flex items-center mb-4">
-                        <input 
-                            type="text" 
-                            placeholder="e.g., mushrooms, cilantro" 
-                            value={newBlacklistedIngredient}
-                            onChange={(e) => setNewBlacklistedIngredient(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    handleAddBlacklistedIngredient();
-                                }
-                            }}
-                            disabled={isReconciling}
-                            className="flex-grow border-gray-300 rounded-l-xl shadow-sm focus:ring-blue-500 disabled:bg-gray-100"
-                        />
-                        <button 
-                            type="button" 
-                            onClick={handleAddBlacklistedIngredient} 
-                            disabled={isReconciling || !newBlacklistedIngredient.trim()}
-                            className="bg-blue-600 text-white px-6 py-2 rounded-r-xl hover:bg-blue-700 font-bold disabled:bg-blue-300 flex items-center gap-2"
-                        >
-                            {isReconciling ? <LoadingIcon className="w-4 h-4" /> : null}
-                            {isReconciling ? 'Checking...' : 'Add'}
-                        </button>
+                {/* Avoided Ingredients & Sensitivities */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Banned Ingredients */}
+                    <div className="p-6 bg-gray-50 rounded-xl border border-gray-200 shadow-sm">
+                        <h3 className="text-xl font-bold text-gray-800 mb-2 flex items-center">
+                            <span className="bg-red-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2">3</span>
+                            Avoided (Banned)
+                        </h3>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase mb-4 tracking-widest">Strict removal from all meals</p>
+                        <div className="flex items-center mb-4">
+                            <input 
+                                type="text" 
+                                placeholder="e.g., mushrooms" 
+                                value={newBlacklistedIngredient}
+                                onChange={(e) => setNewBlacklistedIngredient(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleAddBlacklistedIngredient();
+                                    }
+                                }}
+                                disabled={isReconciling}
+                                className="flex-grow border-gray-300 rounded-l-xl shadow-sm focus:ring-blue-500 disabled:bg-gray-100"
+                            />
+                            <button 
+                                type="button" 
+                                onClick={handleAddBlacklistedIngredient} 
+                                disabled={isReconciling || !newBlacklistedIngredient.trim()}
+                                className="bg-red-600 text-white px-4 py-2 rounded-r-xl hover:bg-red-700 font-bold disabled:bg-red-300"
+                            >
+                                {isReconciling ? <LoadingIcon className="w-4 h-4" /> : 'Add'}
+                            </button>
+                        </div>
+                        <div className="flex flex-wrap gap-2 p-3 bg-white rounded-xl border min-h-[56px]">
+                            {localSettings.blacklistedIngredients.map(ing => (
+                                <span key={ing} className="bg-red-50 text-red-700 text-[10px] font-black pl-3 pr-1 py-1 rounded-full flex items-center border border-red-100 uppercase tracking-tighter">
+                                    {ing}
+                                    <button onClick={() => handleRemoveBlacklistedIngredient(ing)} className="ml-1 text-red-300 hover:text-red-500 transition-colors">
+                                        <XIcon className="h-3 w-3" />
+                                    </button>
+                                </span>
+                            ))}
+                        </div>
                     </div>
-                    {isReconciling && (
-                        <p className="text-xs font-bold text-blue-600 animate-pulse mb-4 flex items-center gap-2">
-                             AI is scanning your library to remove/substitute this ingredient...
-                        </p>
-                    )}
-                    <div className="flex flex-wrap gap-2 p-4 bg-white rounded-xl border items-center min-h-[56px]">
-                        {localSettings.blacklistedIngredients.length === 0 && <span className="text-sm text-gray-400">No ingredients blacklisted yet.</span>}
-                        {localSettings.blacklistedIngredients.map(ing => (
-                            <span key={ing} className="bg-red-50 text-red-700 text-sm font-bold pl-4 pr-2 py-2 rounded-full flex items-center border border-red-100">
-                                {ing}
-                                <button onClick={() => handleRemoveBlacklistedIngredient(ing)} className="ml-2 text-red-400 hover:text-red-600 transition-colors">
-                                    <XIcon className="h-4 w-4" />
-                                </button>
-                            </span>
-                        ))}
+
+                    {/* Minimal Ingredients (Sensitivities) */}
+                    <div className="p-6 bg-gray-50 rounded-xl border border-gray-200 shadow-sm">
+                        <h3 className="text-xl font-bold text-gray-800 mb-2 flex items-center">
+                            <span className="bg-orange-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2">4</span>
+                            Sensitivities (Minimal)
+                        </h3>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase mb-4 tracking-widest">Reduce frequency/quantity</p>
+                        <div className="flex items-center mb-4">
+                            <input 
+                                type="text" 
+                                placeholder="e.g., dairy, garlic" 
+                                value={newMinimalIngredient}
+                                onChange={(e) => setNewMinimalIngredient(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleAddMinimalIngredient();
+                                    }
+                                }}
+                                className="flex-grow border-gray-300 rounded-l-xl shadow-sm focus:ring-blue-500"
+                            />
+                            <button 
+                                type="button" 
+                                onClick={handleAddMinimalIngredient} 
+                                disabled={!newMinimalIngredient.trim()}
+                                className="bg-orange-500 text-white px-4 py-2 rounded-r-xl hover:bg-orange-600 font-bold disabled:bg-orange-300"
+                            >
+                                Add
+                            </button>
+                        </div>
+                        <div className="flex flex-wrap gap-2 p-3 bg-white rounded-xl border min-h-[56px]">
+                            {localSettings.minimalIngredients.map(ing => (
+                                <span key={ing} className="bg-orange-50 text-orange-700 text-[10px] font-black pl-3 pr-1 py-1 rounded-full flex items-center border border-orange-100 uppercase tracking-tighter">
+                                    {ing}
+                                    <button onClick={() => handleRemoveMinimalIngredient(ing)} className="ml-1 text-orange-300 hover:text-orange-500 transition-colors">
+                                        <XIcon className="h-3 w-3" />
+                                    </button>
+                                </span>
+                            ))}
+                        </div>
                     </div>
                 </div>
                 
                 {/* People & Nutrition Goals */}
                 <div className="p-6 bg-gray-50 rounded-xl border border-gray-200 shadow-sm">
                     <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center">
-                         <span className="bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2">4</span>
+                         <span className="bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2">5</span>
                         People & Nutrition Goals
                     </h3>
                     <div className="space-y-6">
@@ -437,10 +515,31 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSettingsChange,
                         })}
                     </div>
                 </div>
-                
-                <div className="flex justify-end pt-4">
-                    <button onClick={handleSave} className="px-10 py-4 bg-blue-600 text-white rounded-xl shadow-lg hover:bg-blue-700 hover:shadow-xl transition-all font-bold text-lg">
-                        Save All Settings
+
+                <div className="flex flex-col md:flex-row justify-between items-center pt-8 border-t border-gray-200 gap-6">
+                    {/* Danger Zone: Reset Application */}
+                    <div className="w-full md:w-auto p-6 bg-red-50 border border-red-100 rounded-3xl flex flex-col items-center text-center gap-3">
+                        <div className="flex items-center gap-2 text-red-700">
+                            <TrashIcon className="w-5 h-5" />
+                            <h4 className="font-black text-sm uppercase tracking-widest leading-none">Danger Zone</h4>
+                        </div>
+                        <p className="text-[10px] font-bold text-red-600 max-w-[240px]">This will permanently wipe all your saved recipes, plans, logs, and settings.</p>
+                        <button 
+                            onClick={handleResetAppWithConfirmation}
+                            onMouseLeave={() => setResetStep(0)}
+                            className={`px-8 py-3 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all shadow-lg active:scale-95 border-2 ${
+                                resetStep === 0 ? 'bg-white border-red-200 text-red-600 hover:bg-red-600 hover:text-white' :
+                                resetStep === 1 ? 'bg-orange-400 border-orange-500 text-white animate-pulse' :
+                                resetStep === 2 ? 'bg-orange-600 border-orange-700 text-white animate-pulse shadow-orange-200' :
+                                'bg-red-600 border-red-700 text-white animate-bounce'
+                            }`}
+                        >
+                            {getResetButtonText()}
+                        </button>
+                    </div>
+
+                    <button onClick={handleSave} className="w-full md:w-auto px-12 py-5 bg-blue-600 text-white rounded-2xl shadow-xl hover:bg-blue-700 hover:shadow-2xl transition-all font-black text-lg transform active:scale-95">
+                        SAVE ALL SETTINGS
                     </button>
                 </div>
             </div>
@@ -452,7 +551,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSettingsChange,
                 />
             )}
 
-            {/* Reconciliation Report Modal */}
             {reconciliationReport && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-[130] p-4">
                     <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-2xl overflow-hidden animate-fade-in flex flex-col max-h-[85vh]">

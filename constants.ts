@@ -256,7 +256,7 @@ export const INITIAL_RECIPES: Recipe[] = [
         macros: { calories: 100, protein: 15, carbs: 2, fat: 2 },
         healthScore: 7.8,
         scoreReasoning: 'Watch sodium, but great protein.',
-        usageIntensity: 'normal',
+        usageIntensity: 'heavy',
         servings: 1
     },
     {
@@ -270,7 +270,7 @@ export const INITIAL_RECIPES: Recipe[] = [
         macros: { calories: 130, protein: 12, carbs: 9, fat: 5 },
         healthScore: 9.4,
         scoreReasoning: 'Excellent plant nutrients.',
-        usageIntensity: 'heavy',
+        usageIntensity: 'light',
         servings: 1
     },
     {
@@ -329,6 +329,76 @@ export const INITIAL_RECIPES: Recipe[] = [
         scoreReasoning: 'Rich in Omega-3s and healthy fats.',
         usageIntensity: 'normal',
         servings: 1
+    },
+    {
+        id: 'r_23',
+        name: 'Italian Prosciutto "Sushi" Rolls',
+        description: 'Savory rolls with prosciutto, pesto, and arugula.',
+        category: RecipeCategory.Snack,
+        tags: [],
+        ingredients: '4-5 slices Prosciutto (approx. 3 oz)\n1.5 tbsp Basil Pesto (ensure gluten-free)\n1 handful Fresh Arugula\n1.5 oz Fresh Mozzarella (sliced thin)\n2 tbsp Sun-dried Tomatoes (chopped)\nPinch of Sea Salt\n1 tbsp Balsamic Glaze',
+        instructions: '1. Lay plastic wrap. Arrange prosciutto slices overlapping. 2. Spread pesto gently. 3. Top with arugula, mozzarella, and tomatoes. 4. Tightly roll up. 5. Refrigerate 10 mins. 6. Slice into bite-sized rounds. Garnish with sea salt and balsamic.',
+        macros: { calories: 280, protein: 18, carbs: 6, fat: 22 },
+        healthScore: 6.2,
+        scoreReasoning: 'High sodium from cured meat, but good protein.',
+        usageIntensity: 'light',
+        servings: 1
+    },
+    {
+        id: 'r_24',
+        name: 'Chocolate Protein Oat Scramble & Yogurt Bowl',
+        description: 'A unique high-protein oat bowl with scrambled oats.',
+        category: RecipeCategory.Breakfast,
+        tags: ['high protein'],
+        ingredients: '1 medium banana (divided use)\n1/2 cup gluten-free rolled oats\n2 large eggs\n1/2 scoop (approx 15g) protein powder\n1 tsp cocoa powder\n1/4 tsp cinnamon\n3/4 cup plain non-fat Greek yogurt\n1 tsp honey\n3 strawberries (sliced)\n1 tbsp unsweetened coconut flakes',
+        instructions: '1. Mash half the banana. Mix with oats, eggs, protein powder, cocoa, and cinnamon. 2. Heat non-stick skillet. Pour mixture and scramble for 4-5 mins. 3. Add yogurt to a bowl. Top with oat scramble, banana slices, strawberries, and coconut.',
+        macros: { calories: 420, protein: 38, carbs: 48, fat: 12 },
+        healthScore: 9.2,
+        scoreReasoning: 'Excellent fiber and protein balance.',
+        usageIntensity: 'light',
+        servings: 1
+    },
+    {
+        id: 'r_25',
+        name: 'Copycat Kirkland Bacon & Gouda Egg Bites',
+        description: 'Smoky, cheesy sous-vide style egg bites.',
+        category: RecipeCategory.Breakfast,
+        tags: ['high protein'],
+        ingredients: '2 large eggs\n2 tbsp cottage cheese (4% fat)\n2 tbsp shredded Gouda cheese\n1 slice bacon (cooked and crumbled)\npinch of sea salt and black pepper',
+        instructions: '1. Blend eggs, cottage cheese, salt, pepper until smooth. 2. Spray silicone mold. Divide bacon and Gouda into 2 cups. 3. Pour egg mixture over. 4. Bake at 300F with water tray for 20-25 mins. 5. Cool before popping out.',
+        macros: { calories: 310, protein: 22, carbs: 4, fat: 24 },
+        healthScore: 7.2,
+        scoreReasoning: 'Good protein, moderate fat from cheese/bacon.',
+        usageIntensity: 'normal',
+        servings: 1
+    },
+    {
+        id: 'r_26',
+        name: 'Gluten-Free Kodiak Protein Pancakes with Creamy Topping',
+        description: 'Quick protein-packed pancakes with a yogurt-cheese whip.',
+        category: RecipeCategory.Breakfast,
+        tags: ['high protein', 'easy to cook'],
+        ingredients: '1/2 cup Kodiak Cakes Gluten-Free Mix\n1/2 cup water (or almond milk)\n1/4 cup non-fat plain Greek yogurt\n1/4 cup low-fat cottage cheese\nCooking spray',
+        instructions: '1. Mix Kodiak and water. 2. Cook on greased skillet until bubbles pop, then flip. 3. Whip yogurt and cottage cheese together. 4. Stack pancakes and top with the creamy mixture.',
+        macros: { calories: 350, protein: 28, carbs: 32, fat: 6 },
+        healthScore: 9.0,
+        scoreReasoning: 'High protein and complex carbs.',
+        usageIntensity: 'light',
+        servings: 1
+    },
+    {
+        id: 'r_27',
+        name: 'Store-Bought David Bar Cookie Dough (Gluten-Free)',
+        description: 'A quick, portable protein snack.',
+        category: RecipeCategory.Snack,
+        tags: ['on-the-go'],
+        ingredients: '1 package Pre-made David Bar (Cookie Dough flavor)',
+        instructions: '1. Remove from packaging. 2. Enjoy as a snack or pre-workout. 3. Optional: Microwave 10s for warm texture.',
+        macros: { calories: 210, protein: 20, carbs: 24, fat: 8 },
+        healthScore: 7.0,
+        scoreReasoning: 'Convenient processed snack with good macros.',
+        usageIntensity: 'normal',
+        servings: 1
     }
 ];
 
@@ -364,7 +434,8 @@ export const DEFAULT_SETTINGS: Settings = {
     },
     people: [
         { name: 'Benjamin', goals: { calories: 2000, protein: 30, carbs: 40, fat: 30 } },
-        { name: 'Kathleen', goals: { calories: 1600, protein: 30, carbs: 40, fat: 30 } },
+        { name: 'Kathleen', goals: { calories: 1750, protein: 30, carbs: 40, fat: 30 } },
     ],
-    blacklistedIngredients: [],
+    blacklistedIngredients: ['quinoa'],
+    minimalIngredients: ['gluten'],
 };

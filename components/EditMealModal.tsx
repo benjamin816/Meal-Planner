@@ -1,147 +1,132 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
-import { Recipe, PlannedMeal, MealType, RecipeCategory, UsageIntensity } from '../types';
-import { XIcon, MagicWandIcon, PlusIcon } from './Icons';
+import { Recipe, PlannedMeal, MealType, RecipeCategory, UsageIntensity, MealPlan } from '../types';
+import { XIcon, MagicWandIcon, CalendarIcon, ShoppingCartIcon, CheckIcon } from './Icons';
 
 interface EditMealModalProps {
   onClose: () => void;
-  onSave: (mealType: MealType, newRecipe: Recipe) => void;
+  onSave: (mealType: MealType, newRecipe: Recipe, mode: 'swap_days' | 'replace_all' | 'replace_single', swapDate?: string) => void;
   recipes: Recipe[];
-  dayPlan: PlannedMeal;
+  mealPlan: MealPlan;
   date: string;
   forcedType?: MealType;
 }
 
-const IntensityIndicatorSmall = ({ intensity }: { intensity: UsageIntensity }) => {
-    const bars = {
-        light: { count: 1, color: 'bg-green-400' },
-        normal: { count: 2, color: 'bg-blue-400' },
-        heavy: { count: 3, color: 'bg-purple-500' }
-    }[intensity];
-
-    return (
-        <div className="flex items-end gap-0.5 h-3" title={`${intensity} usage`}>
-            {[1, 2, 3].map(i => (
-                <div 
-                    key={i} 
-                    className={`w-1 rounded-sm ${i <= bars.count ? bars.color : 'bg-gray-200'} ${i === 1 ? 'h-1.5' : i === 2 ? 'h-2.2' : 'h-3'}`}
-                />
-            ))}
-        </div>
-    );
-};
-
-const EditMealModal: React.FC<EditMealModalProps> = ({ onClose, onSave, recipes, dayPlan, date, forcedType }) => {
+const EditMealModal: React.FC<EditMealModalProps> = ({ onClose, onSave, recipes, mealPlan, date, forcedType }) => {
   const [selectedMealType, setSelectedMealType] = useState<MealType>(forcedType || 'breakfast');
   const [searchTerm, setSearchTerm] = useState('');
+  const [mode, setMode] = useState<'swap_days' | 'replace_all' | 'replace_single'>('swap_days');
 
-  const mealTypesWithRecipes = useMemo((): MealType[] => {
-    return (Object.keys(dayPlan) as MealType[]).filter(mt => dayPlan[mt]);
-  }, [dayPlan]);
-  
-  useEffect(() => {
-    if (forcedType) setSelectedMealType(forcedType);
-  }, [forcedType]);
+  useEffect(() => { if (forcedType) setSelectedMealType(forcedType); }, [forcedType]);
 
-  const currentRecipe = dayPlan[selectedMealType];
-  const recipeCategoryForMealType = useMemo((): RecipeCategory => {
-    switch (selectedMealType) {
-        case 'breakfast': return RecipeCategory.Breakfast;
-        case 'snack': return RecipeCategory.Snack;
-        case 'lunch':
-        case 'dinner':
-        default:
-            return RecipeCategory.Dinner;
-    }
-  }, [selectedMealType]);
-  
+  const currentRecipe = mealPlan.get(date)?.[selectedMealType];
+
   const filteredRecipes = useMemo(() => {
+    if (mode === 'swap_days') return []; 
+    
     return recipes.filter(r => {
         const isLunchOrDinner = selectedMealType === 'lunch' || selectedMealType === 'dinner';
         const categoryMatch = isLunchOrDinner 
             ? r.category === RecipeCategory.Dinner 
-            : (r.category === recipeCategoryForMealType || (recipeCategoryForMealType === RecipeCategory.Breakfast && r.isAlsoBreakfast) || (recipeCategoryForMealType === RecipeCategory.Snack && r.isAlsoSnack));
-            
-        const searchMatch = r.name.toLowerCase().includes(searchTerm.toLowerCase());
-        const notCurrent = r.id !== currentRecipe?.id;
-        return categoryMatch && searchMatch && notCurrent;
-    }).sort((a,b) => {
-        // Sort by intensity preference for swaps
-        const order = { heavy: 3, normal: 2, light: 1 };
-        return order[b.usageIntensity] - order[a.usageIntensity];
-    }).slice(0, 100);
-  }, [recipes, searchTerm, recipeCategoryForMealType, currentRecipe, selectedMealType]);
+            : (r.category === (selectedMealType === 'breakfast' ? RecipeCategory.Breakfast : RecipeCategory.Snack) || (selectedMealType === 'breakfast' && r.isAlsoBreakfast) || (selectedMealType === 'snack' && r.isAlsoSnack));
+        return categoryMatch && r.name.toLowerCase().includes(searchTerm.toLowerCase());
+    }).slice(0, 50);
+  }, [recipes, searchTerm, mode, selectedMealType]);
+
+  const plannedSwaps = useMemo(() => {
+      const swaps: { date: string, recipe: Recipe }[] = [];
+      mealPlan.forEach((day, dStr) => {
+          if (dStr === date || day.isMealPrepDay) return;
+          const r = day[selectedMealType as keyof PlannedMeal] as Recipe;
+          if (r && r.name.toLowerCase().includes(searchTerm.toLowerCase())) {
+              swaps.push({ date: dStr, recipe: r });
+          }
+      });
+      return swaps.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [mealPlan, date, selectedMealType, searchTerm]);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex justify-center items-start pt-16 z-[70] p-4">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-start pt-16 z-[70] p-4">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl max-h-[80vh] flex flex-col overflow-hidden animate-fade-in">
         <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
           <div>
-            <h2 className="text-2xl font-black text-gray-800 tracking-tight">{currentRecipe ? 'Swap Meal' : 'Add Meal'}</h2>
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">
-                {new Date(date).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
-            </p>
+            <h2 className="text-2xl font-black text-gray-800">Modify Meal</h2>
+            <p className="text-xs font-bold text-gray-400 uppercase mt-1">FOR {new Date(date).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-200 transition-colors"><XIcon /></button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><XIcon /></button>
         </div>
-        
-        <div className="p-6 border-b bg-white">
-            <div className="flex items-center gap-3">
-                {!forcedType && (
-                    <select 
-                        value={selectedMealType} 
-                        onChange={e => setSelectedMealType(e.target.value as MealType)}
-                        className="bg-gray-100 border-none rounded-xl text-sm font-bold text-gray-700 py-3 px-4 focus:ring-blue-500"
-                    >
-                        {['breakfast', 'lunch', 'snack', 'dinner'].map(mt => (
-                            <option key={mt} value={mt} className="capitalize">{mt}</option>
-                        ))}
-                    </select>
-                )}
-                <div className="relative flex-grow">
-                    <input
-                        type="text"
-                        placeholder={`Find a ${selectedMealType}...`}
-                        value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
-                        className="w-full bg-gray-50 border-gray-200 rounded-xl py-3 px-4 text-sm focus:ring-blue-500 focus:border-blue-500 font-medium"
-                    />
-                </div>
+
+        <div className="p-1 bg-gray-100 flex text-[10px] font-black uppercase tracking-widest shrink-0">
+            <button onClick={() => setMode('swap_days')} className={`flex-1 py-3 rounded-xl transition-all ${mode === 'swap_days' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Swap Days</button>
+            <button onClick={() => setMode('replace_single')} className={`flex-1 py-3 rounded-xl transition-all ${mode === 'replace_single' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>New (Single)</button>
+            <button onClick={() => setMode('replace_all')} className={`flex-1 py-3 rounded-xl transition-all ${mode === 'replace_all' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Replace All</button>
+        </div>
+
+        <div className="p-6 border-b bg-white space-y-4">
+            <div className="flex gap-3">
+                <input
+                    type="text"
+                    placeholder={`Search ${mode === 'swap_days' ? 'scheduled days' : 'recipe library'}...`}
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    className="w-full bg-gray-50 border-gray-200 rounded-xl py-3 px-4 text-sm focus:ring-blue-500 font-medium"
+                />
             </div>
             {currentRecipe && (
-                <div className="mt-4 flex items-center gap-2 p-3 bg-blue-50 rounded-xl border border-blue-100">
-                    <span className="text-[10px] font-black text-blue-400 uppercase">CURRENT</span>
-                    <p className="text-sm font-bold text-blue-800">{currentRecipe.name}</p>
+                <div className="p-3 bg-blue-50 rounded-xl border border-blue-100 flex justify-between items-center">
+                    <div className="flex-grow">
+                        <span className="text-[9px] font-black text-blue-400 uppercase">Currently Scheduled</span>
+                        <p className="text-sm font-bold text-blue-800">{currentRecipe.name}</p>
+                    </div>
                 </div>
             )}
         </div>
 
-        <div className="flex-grow overflow-y-auto p-2 bg-white">
-            <ul className="space-y-1">
-                {filteredRecipes.map(recipe => (
-                    <li key={recipe.id} className="p-4 hover:bg-gray-50 rounded-2xl flex justify-between items-center group transition-colors">
-                        <div>
-                            <p className="font-bold text-gray-800 group-hover:text-blue-600 transition-colors">{recipe.name}</p>
-                            <div className="flex items-center gap-3 mt-1">
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">{(recipe.macros?.calories || 0).toFixed(0)} kcal</span>
-                                <IntensityIndicatorSmall intensity={recipe.usageIntensity} />
+        <div className="flex-grow overflow-y-auto p-4">
+            {mode === 'swap_days' ? (
+                <div className="space-y-2">
+                    {plannedSwaps.map(swap => (
+                        <div key={swap.date} className="p-4 bg-gray-50 rounded-2xl flex justify-between items-center group">
+                            <div>
+                                <p className="text-[10px] font-black text-blue-600 uppercase mb-1">{new Date(swap.date).toLocaleDateString(undefined, {weekday:'long', month:'short', day:'numeric'})}</p>
+                                <p className="font-bold text-gray-800 line-clamp-1">{swap.recipe.name}</p>
                             </div>
+                            <button 
+                                onClick={() => onSave(selectedMealType, swap.recipe, 'swap_days', swap.date)}
+                                className="bg-blue-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-md active:scale-95"
+                            >
+                                Swap
+                            </button>
                         </div>
-                        <button 
-                            onClick={() => onSave(selectedMealType, recipe)}
-                            className="bg-blue-600 text-white px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 shadow-md transform active:scale-90 transition-all"
-                        >
-                            Select
-                        </button>
-                    </li>
-                ))}
-            </ul>
-            {filteredRecipes.length === 0 && (
-                <div className="text-center py-12 px-6">
-                    <p className="text-gray-400 font-bold uppercase text-xs tracking-widest">No matching recipes found</p>
-                    <p className="text-gray-300 text-xs mt-2">Try adding more recipes to your library first.</p>
+                    ))}
+                    {plannedSwaps.length === 0 && <p className="text-center text-gray-400 py-10 font-bold uppercase text-xs">No other matching {selectedMealType}s found.</p>}
+                </div>
+            ) : (
+                <div className="space-y-1">
+                    {filteredRecipes.map(recipe => (
+                        <div key={recipe.id} className="p-4 hover:bg-gray-50 rounded-2xl flex justify-between items-center group transition-colors">
+                            <div className="flex-grow">
+                                <p className="font-bold text-gray-800 group-hover:text-blue-600">{recipe.name}</p>
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">{(recipe.macros?.calories || 0).toFixed(0)} kcal per serving</p>
+                            </div>
+                            <button 
+                                onClick={() => onSave(selectedMealType, recipe, mode as 'replace_all' | 'replace_single')}
+                                className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase shadow-md transition-all active:scale-90 ${mode === 'replace_all' ? 'bg-purple-600 text-white' : 'bg-blue-600 text-white'}`}
+                            >
+                                {mode === 'replace_all' ? 'Replace All' : 'Select'}
+                            </button>
+                        </div>
+                    ))}
+                    {filteredRecipes.length === 0 && searchTerm && <p className="text-center text-gray-400 py-10 font-bold uppercase text-xs">No library matches found.</p>}
                 </div>
             )}
         </div>
+        {mode === 'replace_all' && (
+            <div className="p-4 bg-purple-50 border-t border-purple-100 flex items-center gap-3">
+                <MagicWandIcon className="w-5 h-5 text-purple-600" />
+                <p className="text-[10px] font-black text-purple-800 uppercase leading-tight">This will replace ALL occurrences of "{currentRecipe?.name || 'the current recipe'}" throughout the plan.</p>
+            </div>
+        )}
       </div>
     </div>
   );

@@ -1,4 +1,3 @@
-
 export interface Tab {
   id: 'planner' | 'shopping' | 'meals' | 'log' | 'settings';
   label: string;
@@ -53,6 +52,7 @@ export interface Settings {
   dailyMeals: Record<DayOfWeek, DaySettings>;
   people: Person[];
   blacklistedIngredients: string[];
+  minimalIngredients: string[];
 }
 
 export interface Recipe {
@@ -78,6 +78,7 @@ export interface Recipe {
     isDefaultDrink?: boolean;
     baseRecipeId?: string;
     variationName?: string;
+    deletedAt?: string; // ISO timestamp
 }
 
 export type MealType = 'breakfast' | 'lunch' | 'snack' | 'dinner' | 'drink';
