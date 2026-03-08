@@ -18,3 +18,12 @@ View your app in AI Studio: https://ai.studio/apps/drive/10hRNQQCR8mR3ls9-_c0StC
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`
+
+## Google Sheets + Apps Script Sync
+
+This project now supports syncing all planner data to a Google Sheet via Apps Script.
+
+1. Upload [`MealPlanner_GoogleSheets_Template.xlsx`](./MealPlanner_GoogleSheets_Template.xlsx) to Google Drive and open with Google Sheets.
+2. Configure and deploy the script in [`google-apps-script/`](./google-apps-script/README.md).
+3. Set `SPREADSHEET_ID` and `APPS_SCRIPT_WEB_APP_URL` in `.env.local`.
+4. Restart the app.
