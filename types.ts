@@ -12,7 +12,7 @@ export enum RecipeCategory {
 
 export type UsageIntensity = 'light' | 'normal' | 'heavy';
 
-export type RecipeTag = 'affordable' | 'high protein' | 'low cal' | 'high cal' | 'premium' | 'easy to cook' | 'longer to cook' | 'on-the-go' | 'microwave' | 'needs prepared';
+export type RecipeTag = 'affordable' | 'high protein' | 'low cal' | 'high cal' | 'premium' | 'easy to cook' | 'longer to cook' | 'on-the-go' | 'microwave' | 'needs prepared' | 'storebought';
 
 export interface NutritionGoals {
   calories: number;
@@ -53,6 +53,7 @@ export interface Settings {
   people: Person[];
   blacklistedIngredients: string[];
   minimalIngredients: string[];
+  preferFrozen: boolean;
 }
 
 export interface Recipe {
@@ -138,6 +139,7 @@ export interface ShoppingListItem {
     id: string;
     name: string;
     checked: boolean;
+    sources?: string[]; // Names of recipes contributing to this item
 }
 
 export interface ShoppingListCategory {
@@ -158,6 +160,7 @@ export interface PrepWorkflowStep {
     description: string;
     estimatedMinutes: number;
     type: 'setup' | 'prep' | 'cooking' | 'storage';
+    ingredients: string[]; // Specific ingredients needed for this step
 }
 
 export interface PrepWorkflow {

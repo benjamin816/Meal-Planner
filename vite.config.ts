@@ -12,7 +12,9 @@ export default defineConfig(({ mode }) => {
       plugins: [react()],
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
+        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+        'process.env.APPS_SCRIPT_WEB_APP_URL': JSON.stringify(env.APPS_SCRIPT_WEB_APP_URL),
+        'process.env.SPREADSHEET_ID': JSON.stringify(env.SPREADSHEET_ID),
       },
       resolve: {
         alias: {
